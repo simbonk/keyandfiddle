@@ -25,7 +25,8 @@ export function useAnimationCanvas(
     let ch = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      const rect = canvas.getBoundingClientRect();
+      // layout size, not the on-screen box, so a rotated (CSS-transformed) canvas still draws right
+      const rect = { width: canvas.clientWidth, height: canvas.clientHeight };
       // keep the backing store under ~2.5M pixels so big iPads stay smooth
       let dpr = Math.min(window.devicePixelRatio || 1, 2);
       const area = rect.width * rect.height;

@@ -122,7 +122,8 @@ export function violinLayout(w: number, h: number, mm: number, big = false, top 
   };
   // G string hugs the edge the hand curls over (top, or bottom)
   const e = top ? 1 : -1;
-  const gY = top ? 3 * wm + 1 : h - 3 * wm - 1;
+  // flush with the screen edge: the hand curls over the edge straight onto it
+  const gY = top ? 1.5 : h - 1.5;
   const stringY = (s: number, x: number) => {
     if (x > fbEnd && x < padX) {
       const t = (x - fbEnd) / (padX - fbEnd);
@@ -761,7 +762,8 @@ function drawViolinSurface(
     ctx.font = `800 ${Math.round(Math.min(15, sp0 * 0.75))}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(STRINGS[s].name, L.openX, L.stringY(s, L.nutX) + 1);
+    const ny = L.stringY(s, L.nutX);
+    ctx.fillText(STRINGS[s].name, L.openX, L.top ? Math.max(10, ny) : Math.min(L.h - 10, ny));
     ctx.textBaseline = 'alphabetic';
     if (showNames) {
       ctx.font = `700 ${Math.round(Math.max(9, Math.min(12, sp0 * 0.42)))}px ${FONT}`;

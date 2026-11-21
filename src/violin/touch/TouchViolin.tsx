@@ -5,6 +5,7 @@ import { SongPicker } from '../../ui/SongPicker';
 import { useAnimationCanvas } from '../../ui/useAnimationCanvas';
 import { STRINGS, VIOLIN_SONGS, violinNotes } from '../theory';
 import type { VNoteState } from '../violinHighway';
+import { RotateTip } from './RotateTip';
 import { loadViolin, sendStrings, silence, unlockAudio } from './engine';
 import { type DrawTargets, type ViolinOptions, TouchViolinState, VIOLIN_SIZES, drawTouchViolin, screenPxPerMm, violinLayout } from './instrument';
 import type { StringMsg } from './violinProcessor';
@@ -54,9 +55,13 @@ interface StoredOpts extends ViolinOptions {
   size: string;
   /** neck on the right, bow with the left hand */
   neckRight: boolean;
+  /** portrait screen held sideways: which way the violin is drawn */
+  turn: 'cw' | 'ccw';
+  /** the "upright, rotation lock, sideways" tip has been seen */
+  tipSeen: boolean;
 }
 function loadOpts(): StoredOpts {
-  const def: StoredOpts = { snap: true, easyBow: true, vibrato: true, names: false, big: false, neckTop: true, size: '4/4', neckRight: false };
+  const def: StoredOpts = { snap: true, easyBow: true, vibrato: true, names: false, big: false, neckTop: true, size: '4/4', neckRight: false, turn: 'cw', tipSeen: false };
   try {
     return { ...def, ...JSON.parse(localStorage.getItem(OPTS_KEY) || '{}') };
   } catch {
@@ -87,6 +92,29 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
     }
   }, [opts]);
   useEffect(() => () => silence(), []);
+
+  // Portrait screen (rotation locked) held sideways: draw the whole violin
+  // screen turned a quarter, so it never jumps when the iPad tilts.
+  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
+  useEffect(() => {
+    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', on);
+    window.addEventListener('orientationchange', on);
+    return () => {
+      window.removeEventListener('resize', on);
+      window.removeEventListener('orientationchange', on);
+    };
+  }, []);
+  const portrait = vp.h > vp.w;
+  const rot: 'none' | 'cw' | 'ccw' = portrait ? opts.turn : 'none';
+  const frame: React.CSSProperties =
+    rot === 'none'
+      ? {}
+      : {
+          width: vp.h,
+          height: vp.w,
+          transform: rot === 'cw' ? `translateX(${vp.w}px) rotate(90deg)` : `translateY(${vp.h}px) rotate(-90deg)`,
+        };
 
   const bpm = song?.bpm ?? 80;
   const beatMs = 60000 / (bpm * speed);
@@ -299,10 +327,13 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
       el.removeEventListener('touchmove', stop);
     };
   }, [surfaceRef]);
-  const pt = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    return [e.clientX - r.left, e.clientY - r.top] as const;
+  /** screen point -> the violin's own (unrotated) canvas coordinates */
+  const local = (cx: number, cy: number, r: DOMRect): [number, number] => {
+    if (rot === 'cw') return [cy - r.top, r.right - cx];
+    if (rot === 'ccw') return [r.bottom - cy, cx - r.left];
+    return [cx - r.left, cy - r.top];
   };
+  const pt = (e: React.PointerEvent<HTMLCanvasElement>) => local(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
   // neck on the right: the violin is drawn mirrored, so mirror the touches too
   const fx = (x: number) => (opts.neckRight ? vs.L.w - x : x);
   const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -321,8 +352,11 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
     if (demoing) return;
     const evs = e.nativeEvent.getCoalescedEvents?.() ?? [];
     const r = e.currentTarget.getBoundingClientRect();
-    if (evs.length > 1) for (const c of evs) vs.move(e.pointerId, fx(c.clientX - r.left), c.clientY - r.top, c.timeStamp);
-    else vs.move(e.pointerId, fx(e.clientX - r.left), e.clientY - r.top, e.timeStamp);
+    const list = evs.length > 1 ? evs : [e.nativeEvent];
+    for (const c of list) {
+      const [x, y] = local(c.clientX, c.clientY, r);
+      vs.move(e.pointerId, fx(x), y, c.timeStamp);
+    }
   };
   const onUp = (e: React.PointerEvent<HTMLCanvasElement>) => vs.up(e.pointerId);
 
@@ -345,7 +379,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
     : null;
 
   return (
-    <div className={`lesson touch-violin ${opts.neckTop ? 'neck-top' : ''}`}>
+    <div className={`lesson touch-violin tv-full ${opts.neckTop ? 'neck-top' : ''} ${rot !== 'none' ? 'tv-turned' : ''}`} style={frame}>
       <div className="game-bar">
         <button className="btn small ghost back" onClick={onExit}>
           ◀<span className="lbl"> Songs</span>
@@ -431,6 +465,14 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
             </>
           )}
         </div>
+        {portrait && (
+          <button className="btn small ghost" onClick={() => setOpts((o) => ({ ...o, turn: o.turn === 'cw' ? 'ccw' : 'cw' }))}>
+            ↻<span className="lbl"> Flip</span>
+          </button>
+        )}
+        <button className="btn small ghost" onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))} aria-label="How to hold it">
+          ?
+        </button>
         <FullscreenButton />
       </div>
 
@@ -509,7 +551,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
         </div>
       )}
       </div>
-      <div className="tv-rotate">↻ Turn the iPad sideways and hold it like a violin</div>
+      {!opts.tipSeen && <RotateTip portrait={portrait} onDone={() => setOpts((o) => ({ ...o, tipSeen: true }))} />}
     </div>
   );
 }
