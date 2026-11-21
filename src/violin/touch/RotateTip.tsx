@@ -71,12 +71,29 @@ export function RotateGraphic() {
         <rect x={310} y={88} width={60} height={23} rx={4} fill="#8f4a17" />
         {/* a note sliding in toward the neck */}
         <path d="M318 76 L338 52" stroke={ACCENT} strokeWidth={7} strokeLinecap="round" />
-        {/* left hand: palm past the edge, fingers curled over onto the strings */}
+        {/* left hand, as it really holds it: the hand wraps the right edge from
+            behind, the four fingers curl over onto the strings, the thumb stays
+            behind the iPad near the top */}
         <g>
-          {[42, 51, 60, 69].map((y) => (
-            <rect key={y} x={359} y={y - 2.6} width={30} height={5.2} rx={2.6} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
+          {/* thumb, hidden behind the iPad */}
+          <path d="M392 36 C384 30 368 24 352 26" stroke="#f2c9a0" strokeWidth={7} strokeLinecap="round" fill="none" opacity={0.35} />
+          <path d="M392 36 C384 30 368 24 352 26" stroke={INK} strokeWidth={1} strokeDasharray="2 2.5" fill="none" opacity={0.8} />
+          {/* side of the hand, outside the edge */}
+          <rect x={385} y={36} width={20} height={44} rx={10} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
+          {/* fingers: knuckle outside, then bent over the edge onto the strings */}
+          {[
+            [41, 7.6, 0],
+            [50.5, 8, 0],
+            [60, 7.6, 1],
+            [69, 6.6, 3],
+          ].map(([y, h, short]) => (
+            <g key={y}>
+              <rect x={373 + short} y={y - h / 2} width={22 - short} height={h} rx={h / 2} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
+              <rect x={359 + short} y={y - h / 2 + 0.6} width={17} height={h - 1.2} rx={(h - 1.2) / 2} fill="#f6d3ad" stroke="#a5704a" strokeWidth={1} />
+              <ellipse cx={362.5 + short} cy={y} rx={2.2} ry={h / 2 - 1.6} fill="#fbe3cc" />
+              <path d={`M${381 + short} ${y - h / 2 + 1.2} v${h - 2.4}`} stroke="#a5704a" strokeWidth={0.8} />
+            </g>
           ))}
-          <ellipse cx={393} cy={56} rx={9} ry={17} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
         </g>
         {/* bowing pinky */}
         <circle cx={330} cy={99} r={4.5} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
@@ -90,8 +107,11 @@ export function RotateGraphic() {
         <text x={302} y={102} textAnchor="end" fill={MUTED} fontSize={9} fontWeight={800}>
           bow
         </text>
-        <text x={398} y={82} textAnchor="middle" fill={MUTED} fontSize={9} fontWeight={800}>
-          fingers
+        <text x={396} y={92} textAnchor="middle" fill={MUTED} fontSize={9} fontWeight={800}>
+          left hand
+        </text>
+        <text x={403} y={27} textAnchor="middle" fill={MUTED} fontSize={7} fontWeight={700}>
+          thumb behind
         </text>
       </g>
       <text x={338} y={154} textAnchor="middle" fill={MUTED} fontSize={13} fontWeight={700}>
