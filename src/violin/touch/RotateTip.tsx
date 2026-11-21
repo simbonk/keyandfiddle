@@ -17,20 +17,9 @@ function Ipad({ x, y, w, h, children }: { x: number; y: number; w: number; h: nu
   );
 }
 
-function Strings({ x, y, len, gap }: { x: number; y: number; len: number; gap: number }) {
-  const cols = ['#52d273', '#2ec4f1', '#ffd60a', '#ff4d6d'];
-  return (
-    <g>
-      {cols.map((c, i) => (
-        <line key={c} x1={x} x2={x + len} y1={y + i * gap} y2={y + i * gap} stroke={c} strokeWidth={1.6} />
-      ))}
-    </g>
-  );
-}
-
 export function RotateGraphic() {
   return (
-    <svg viewBox="0 0 430 152" className="tv-tip-art" role="img" aria-label="Hold the iPad upright, turn on rotation lock, then turn it sideways">
+    <svg viewBox="0 0 430 160" className="tv-tip-art" role="img" aria-label="Hold the iPad upright, turn on rotation lock, then turn it sideways">
       {/* 1. upright */}
       <Ipad x={22} y={14} w={74} h={102} />
       {/* USB-C port on top, top button at the bottom (upside down) */}
@@ -64,31 +53,48 @@ export function RotateGraphic() {
       <path d="M232 65 h22" stroke={MUTED} strokeWidth={2.5} strokeLinecap="round" />
       <path d="M248 58 l8 7 l-8 7" fill="none" stroke={MUTED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
-      {/* 3. sideways like a violin, tilted, looked at from the chin end */}
-      <g transform="rotate(-22 330 66)">
-      <Ipad x={272} y={26} w={128} h={86}>
-        <rect x={278} y={31} width={14} height={20} rx={3} fill="#8a4a1c" />
-        <rect x={292} y={31} width={66} height={20} fill="#17140f" />
-        <Strings x={292} y={33} len={100} gap={5.4} />
-        <rect x={362} y={31} width={33} height={76} rx={5} fill="#8f4a17" opacity={0.85} />
-        <path d="M374 62 l-6 30 M380 62 l-2 30 M386 62 l2 30" stroke={ACCENT} strokeWidth={1.6} opacity={0.8} />
-        {/* the words, turned to face the player */}
-        <g transform="rotate(-60 322 82)">
-          <rect x={304} y={76} width={36} height={11} rx={5.5} fill={ACCENT} />
-          <text x={322} y={84.5} textAnchor="middle" fontSize={7} fontWeight={800} fill="#10082a">
-            A · V
-          </text>
+      {/* 3. held like a violin: upright, USB-C toward the scroll, tilted a little.
+          Left fingers curl over the right edge onto the strings, the chin rests on
+          the bow end at the bottom, the other pinky bows in the bow area. */}
+      <g transform="rotate(16 340 66)">
+        <rect x={305} y={14} width={70} height={102} rx={10} fill="#0e0a24" stroke={INK} strokeWidth={2.5} />
+        <rect x={310} y={19} width={60} height={92} rx={6} fill={SCREEN} />
+        {/* USB-C on top */}
+        <rect x={333} y={10} width={14} height={4} rx={2} fill={ACCENT} />
+        {/* pegbox and fingerboard along the right edge */}
+        <rect x={352} y={19} width={18} height={13} rx={3} fill="#8a4a1c" />
+        <rect x={354} y={32} width={16} height={56} fill="#17140f" />
+        {['#ff4d6d', '#ffd60a', '#2ec4f1', '#52d273'].map((c, i) => (
+          <line key={c} x1={357 + i * 4} x2={357 + i * 4} y1={32} y2={110} stroke={c} strokeWidth={1.4} />
+        ))}
+        {/* bow area at the bottom */}
+        <rect x={310} y={88} width={60} height={23} rx={4} fill="#8f4a17" />
+        {/* a note sliding in toward the neck */}
+        <path d="M318 76 L338 52" stroke={ACCENT} strokeWidth={7} strokeLinecap="round" />
+        {/* left hand: palm past the edge, fingers curled over onto the strings */}
+        <g>
+          {[42, 51, 60, 69].map((y) => (
+            <rect key={y} x={359} y={y - 2.6} width={30} height={5.2} rx={2.6} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
+          ))}
+          <ellipse cx={393} cy={56} rx={9} ry={17} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
         </g>
-      </Ipad>
+        {/* bowing pinky */}
+        <circle cx={330} cy={99} r={4.5} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
+        <path d="M321 92 l-3 -4 l-3 4 M321 106 l-3 4 l-3 -4 M318 89 v20" stroke={INK} strokeWidth={1.3} fill="none" opacity={0.8} />
+        {/* chin on the bow end */}
+        <path d="M322 131 a18 14 0 0 1 36 0 z" fill="#f2c9a0" stroke={INK} strokeWidth={1.8} />
+        <path d="M333 126 q7 4 14 0" stroke="#5a3418" strokeWidth={1.8} fill="none" strokeLinecap="round" />
+        <text x={308} y={130} textAnchor="end" fill={MUTED} fontSize={9} fontWeight={800}>
+          chin
+        </text>
+        <text x={302} y={102} textAnchor="end" fill={MUTED} fontSize={9} fontWeight={800}>
+          bow
+        </text>
+        <text x={398} y={82} textAnchor="middle" fill={MUTED} fontSize={9} fontWeight={800}>
+          fingers
+        </text>
       </g>
-      {/* the player: chin on the bow end, looking up the neck */}
-      <g>
-        <circle cx={404} cy={118} r={13} fill="#f2c9a0" stroke={INK} strokeWidth={2} />
-        <path d="M393 112 q11 -14 22 0" fill="#5a3418" />
-        <path d="M396 110 l-36 -40" stroke={ACCENT} strokeWidth={2} strokeDasharray="3 4" strokeLinecap="round" />
-        <path d="M356 72 l2 8 l5 -6 z" fill={ACCENT} />
-      </g>
-      <text x={330} y={146} textAnchor="middle" fill={MUTED} fontSize={13} fontWeight={700}>
+      <text x={338} y={154} textAnchor="middle" fill={MUTED} fontSize={13} fontWeight={700}>
         3. Hold it like a violin
       </text>
     </svg>
@@ -111,8 +117,8 @@ export function RotateTip({ portrait, onDone }: { portrait: boolean; onDone: () 
             stops turning.
           </li>
           <li>
-            <b>Hold it like a violin:</b> chin end toward you, tilted, looking up the neck. The strings are right
-            at the edge your fingers curl over, and the words turn to face you (change the angle in ⚙️ Options,
+            <b>Hold it like a violin:</b> USB-C end away from you, tilted a little. Your left fingers curl over the edge
+            onto the strings, your chin rests on the bow end, and your other pinky bows. The words turn to face you (change the angle in ⚙️ Options,
             Word angle). Upside down? Tap <b>↻ Flip</b>.
           </li>
         </ol>
