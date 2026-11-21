@@ -19,7 +19,11 @@ export function MicGate({ children, why }: { children: React.ReactNode; why?: st
           The microphone is blocked. On iPad: Settings › Safari › Microphone › Allow, then reload this page.
         </p>
       )}
-      {status === 'error' && <p className="warn">Couldn't start the microphone: {mic.error}</p>}
+      {status === 'error' && (
+        <p className="warn">
+          {mic.error.startsWith('The microphone') ? mic.error : `Couldn't start the microphone: ${mic.error}`}
+        </p>
+      )}
     </div>
   );
 }

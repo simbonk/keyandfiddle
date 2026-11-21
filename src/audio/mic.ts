@@ -41,6 +41,7 @@ export class MicEngine {
   stream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
   private boostNode: GainNode | null = null;
+  private zeroSince = 0;
   /** Extra software gain on the mic before listening (quiet iPad mics). */
   boost = savedBoost();
   private buf: Float32Array<ArrayBuffer> = new Float32Array(2048);
@@ -71,15 +72,21 @@ export class MicEngine {
   /** Must be called from a user gesture on iOS. */
   start(): Promise<void> {
     if (this.status === 'running') {
-      this.ctx?.resume();
-      return Promise.resolve();
+      if (this.stream?.getAudioTracks().some((t) => t.readyState === 'live')) {
+        this.ctx?.resume();
+        return Promise.resolve();
+      }
+      this.stop(); // the iPad ended the mic (e.g. the app went to the background): start fresh
     }
     if (this.starting) return this.starting;
     this.setStatus('starting');
     this.starting = (async () => {
       try {
-        const ctx = getAudioContext();
-        await ctx.resume();
+        // The mic gets its own fresh audio context, made right here in the tap.
+        // Sharing the playback context made iPads feed the app silence from the
+        // mic once some sound had already played.
+        const ctx = newCaptureContext() ?? getAudioContext();
+        await ctx.resume().catch(() => undefined);
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: false,
@@ -182,6 +189,22 @@ export class MicEngine {
     const now = performance.now();
     if (!this.analyser || !this.detector) return;
     this.analyser.getFloatTimeDomainData(this.buf);
+    // Watchdog: a live mic always has a little noise. Perfect digital silence
+    // for 2 s, or an ended track, means the iPad cut us off. Stop and ask for a
+    // tap so it can start fresh (iOS only allows that from a tap).
+    let nonzero = false;
+    for (let i = 0; i < this.buf.length; i += 8)
+      if (this.buf[i] !== 0) {
+        nonzero = true;
+        break;
+      }
+    if (nonzero || !this.zeroSince) this.zeroSince = nonzero ? 0 : now;
+    const ended = this.stream?.getAudioTracks().every((t) => t.readyState === 'ended');
+    if (ended || (this.zeroSince && now - this.zeroSince > 2000)) {
+      this.stop();
+      this.setStatus('error', "The microphone stopped sending sound. Tap 'Turn on microphone' to start it again.");
+      return;
+    }
     const r = this.detector.detect(this.buf);
     const rms = r.rms;
     this.slowLevel = this.slowLevel * 0.9 + rms * 0.1;
@@ -206,11 +229,27 @@ export class MicEngine {
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.analyser = null;
+    this.zeroSince = 0;
+    if (this.ctx && this.ctx !== sharedCtx) this.ctx.close().catch(() => undefined);
+    this.ctx = null;
     this.setStatus('idle');
   }
 }
 
 let sharedCtx: AudioContext | null = null;
+
+/** A separate AudioContext for listening to the mic (null if the browser refuses). */
+export function newCaptureContext(): AudioContext | null {
+  try {
+    const Ctor: typeof AudioContext =
+      window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const c = new Ctor({ latencyHint: 'interactive' });
+    c.resume().catch(() => undefined);
+    return c;
+  } catch {
+    return null;
+  }
+}
 export function getAudioContext(): AudioContext {
   if (!sharedCtx) {
     const Ctor: typeof AudioContext =
