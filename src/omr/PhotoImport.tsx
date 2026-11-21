@@ -173,7 +173,7 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
         <>
           <p className="muted small">
             I found {res.notes.length} notes. Tap ▶ to hear them. Pink = right hand, blue = left hand. Tap a circle to fix
-            it, or ➕ to add one I missed. I can't read rests, ties or sharps/flats inside a bar yet, so fix those by hand.
+            it, or ➕ to add one I missed. Small grace notes are left out.
           </p>
           <div className="row wrap pi-controls">
             <label className="field">

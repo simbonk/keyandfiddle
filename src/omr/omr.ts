@@ -786,6 +786,8 @@ export function recognize(g: Gray): OmrResult {
     if (heads.some((h) => Math.abs(h.x - c.x) < s * 0.9 && Math.abs(h.y - c.y) < s * 0.7)) continue;
     // reject long horizontal ink (beams, thick ledger clusters)
     if (b.hRun(c.x, c.y) > s * 2.6) continue;
+    // small grace notes are ornaments, not notes to play in time
+    if (b.frac(c.x, c.y, s * 1.2, s * 0.8) < 0.7) continue;
     heads.push({ x: c.x, y: c.y, filled: true });
   }
   // a hollow head's thin rim can break up after thresholding and let its hole
@@ -876,6 +878,8 @@ export function recognize(g: Gray): OmrResult {
       const ts = timeSigAt(b, sts, x, s);
       if (ts) notes = notes.filter((n) => !(idx.includes(n.staff) && n.x >= ts[0] - s * 0.5 && n.x <= ts[1] + s * 0.5));
     }
+    // a "hollow head" hugging a barline is a gap between the bar and a stem
+    notes = notes.filter((n) => n.filled || !idx.includes(n.staff) || !bl.some((x) => Math.abs(x - n.x) < s * 0.9));
   }
 
   // --- rests
