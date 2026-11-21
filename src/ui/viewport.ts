@@ -1,7 +1,8 @@
-// The real screen size for layout. On iPhone home-screen apps (with the
-// translucent status bar) iOS can report a window that stops short of the
-// bottom of the screen, which leaves an empty strip under the bottom bar.
-// There we use the full screen height instead.
+// Screen size and the bottom safe area for layout.
+// On some iPhones a home-screen app's window stops short of the bottom of the
+// screen (iOS keeps the area by the home indicator for itself). Then the
+// home-indicator padding is already outside our window, so we drop it and
+// let the bottom bars sit right at the bottom of what we can draw.
 
 function standalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -12,36 +13,37 @@ function standalone(): boolean {
   );
 }
 
-export function screenSize(): { w: number; h: number } {
+/** true when the window ends above the bottom edge of the screen */
+function shortWindow(): boolean {
+  if (!standalone() || !/iPhone|iPod/.test(navigator.userAgent)) return false;
   const w = window.innerWidth;
   const h = window.innerHeight;
-  if (!standalone() || !/iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent)) return { w, h };
+  if (w > h) return false;
   const long = Math.max(screen.width, screen.height);
-  const short = Math.min(screen.width, screen.height);
-  const sw = w > h ? long : short;
-  const sh = w > h ? short : long;
-  // only when the width matches the screen and the height is a little short
-  if (Math.abs(sw - w) <= 2 && sh > h && sh - h <= 140) return { w, h: sh };
-  return { w, h };
+  return long - h > 20;
+}
+
+export function screenSize(): { w: number; h: number } {
+  return { w: window.innerWidth, h: window.innerHeight };
 }
 
 let sabCache: number | null = null;
-/** Height of the home indicator area at the bottom of the screen, in px. */
+/** Height of the home indicator padding at the bottom of our window, in px. */
 export function safeBottom(): number {
   if (sabCache !== null) return sabCache;
   const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:env(safe-area-inset-bottom)';
+  d.style.cssText = 'position:fixed;visibility:hidden;padding-bottom:var(--safe-b)';
   document.body.appendChild(d);
   sabCache = parseFloat(getComputedStyle(d).paddingBottom) || 0;
   d.remove();
   return sabCache;
 }
 
-/** Keep --app-h (the app's full height) up to date. */
+/** Keep the short-window flag (html.vp-short) up to date. */
 export function trackAppHeight() {
   const set = () => {
     sabCache = null;
-    document.documentElement.style.setProperty('--app-h', `${screenSize().h}px`);
+    document.documentElement.classList.toggle('vp-short', shortWindow());
   };
   set();
   window.addEventListener('resize', set);

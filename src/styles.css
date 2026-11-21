@@ -23,6 +23,12 @@
      need their own gestures set touch-action themselves and win over this */
   touch-action: manipulation;
 }
+:root {
+  --safe-b: env(safe-area-inset-bottom);
+}
+html.vp-short {
+  --safe-b: 0px;
+}
 html,
 body,
 #root {
@@ -47,14 +53,9 @@ input {
 .app {
   display: flex;
   flex-direction: column;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
   height: 100%;
   height: 100dvh;
-  height: var(--app-h, 100dvh);
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) var(--safe-b) env(safe-area-inset-left);
 }
 
 /* ---------- top bar (slim) ---------- */
@@ -2377,7 +2378,7 @@ select option {
   z-index: 61;
   display: flex;
   align-items: flex-start;
-  padding: 8px 6px env(safe-area-inset-bottom);
+  padding: 8px 6px var(--safe-b);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 8, 32, 0.96);
 }
@@ -2443,8 +2444,8 @@ select option {
 .tabbar {
   flex-shrink: 0;
   /* the bar runs to the bottom edge; its buttons sit above the home indicator */
-  padding: 8px 6px calc(env(safe-area-inset-bottom) + 12px);
-  margin-bottom: calc(-1 * env(safe-area-inset-bottom));
+  padding: 8px 6px calc(var(--safe-b) + 10px);
+  margin-bottom: calc(-1 * var(--safe-b));
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(12, 8, 32, 0.92);
   backdrop-filter: blur(16px);
@@ -2688,4 +2689,12 @@ select option {
 }
 .tv-bottombar .game-bar > .btn.small:not(:has(.lbl)) {
   display: none;
+}
+
+/* iPhone upright: the header sits a little lower, clear of the blur iOS puts
+   behind the status bar */
+@media (max-width: 600px) and (orientation: portrait) {
+  .app > .topbar {
+    padding-top: 16px;
+  }
 }
