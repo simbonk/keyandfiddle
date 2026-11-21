@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react';
 import { PianoTab } from './piano/PianoTab';
 import { ChromeContext, FullscreenButton } from './ui/chrome';
 import { ViolinTab } from './violin/ViolinTab';
-import { VoiceTab } from './voice/VoiceTab';
+import { SoundLab } from './piano/SoundLab';
 
-type Tab = 'piano' | 'violin' | 'voice';
+type Tab = 'piano' | 'violin' | 'keyboard';
+const TABS: Tab[] = ['piano', 'violin', 'keyboard'];
 
 export function App() {
   const [tab, setTab] = useState<Tab>(() => {
     try {
-      return (localStorage.getItem('kf.tab') as Tab) || 'piano';
+      const t = localStorage.getItem('kf.tab') as Tab;
+      return TABS.includes(t) ? t : 'piano';
     } catch {
       return 'piano';
     }
@@ -43,14 +45,24 @@ export function App() {
             <button role="tab" aria-selected={tab === 'violin'} className={tab === 'violin' ? 'on' : ''} onClick={() => pick('violin')}>
               🎻<span className="lbl"> Violin</span>
             </button>
-            <button role="tab" aria-selected={tab === 'voice'} className={tab === 'voice' ? 'on' : ''} onClick={() => pick('voice')}>
-              🎤<span className="lbl"> Voice</span>
+            <button role="tab" aria-selected={tab === 'keyboard'} className={tab === 'keyboard' ? 'on' : ''} onClick={() => pick('keyboard')}>
+              🎛️<span className="lbl"> Keyboard</span>
             </button>
           </nav>
           <div className="subnav-slot" ref={setSlot} />
           <FullscreenButton className="btn small ghost fs-top" />
         </header>
-        <main className="main">{tab === 'piano' ? <PianoTab /> : tab === 'violin' ? <ViolinTab /> : <VoiceTab />}</main>
+        <main className="main">
+          {tab === 'piano' ? (
+            <PianoTab />
+          ) : tab === 'violin' ? (
+            <ViolinTab />
+          ) : (
+            <div className="tab-body">
+              <SoundLab />
+            </div>
+          )}
+        </main>
       </div>
     </ChromeContext.Provider>
   );

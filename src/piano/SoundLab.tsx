@@ -41,7 +41,7 @@ function preview(id: SoundId) {
 
 type RecState = 'idle' | 'listening' | 'hearing' | 'quiet' | 'denied' | 'error';
 
-/** Pick a keyboard sound, make your own from the mic, and play freely. */
+/** The Keyboard tab: pick a sound, make your own from the mic, and play freely. */
 export function SoundLab() {
   const sound = useKeyboardSound();
   const mine = useMySounds();
@@ -52,7 +52,6 @@ export function SoundLab() {
   const [level, setLevel] = useState(0);
   const recHandle = useRef<ReturnType<typeof recordSound> | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const [tryIt, setTryIt] = useState(false);
 
   useEffect(() => {
     preloadSound(sound, octave, octave + 24);
@@ -90,7 +89,6 @@ export function SoundLab() {
       return;
     }
     setRec('idle');
-    setTryIt(true);
     setSound(`mine:${r.sound.id}`);
     preview(`mine:${r.sound.id}`);
   };
@@ -101,12 +99,7 @@ export function SoundLab() {
   return (
     <div className="sound-lab">
       <div className="panel slim">
-        <div className="row sound-title">
-          <b>Pick your keyboard sound, then pick a song below</b>
-          <button className={`btn small ${tryIt ? 'primary' : 'ghost'}`} onClick={() => setTryIt((t) => !t)}>
-            🎹 {tryIt ? 'Hide keys' : 'Try it'}
-          </button>
-        </div>
+        <b>Pick a keyboard sound</b>
         <div className="sound-grid">
           {SOUNDS.map((s) => (
             <button key={s.id} className={`sound-card ${sound === s.id ? 'on' : ''}`} onClick={() => pick(s.id)}>
@@ -143,7 +136,7 @@ export function SoundLab() {
                         ? 'Something went wrong with the microphone. Try again?'
                         : full
                           ? `You have ${MAX_MY_SOUNDS} sounds. Tap ✖ on one to make room.`
-                          : 'Tap the red button, then say hello, cough, clap, sneeze or sing! It turns into a whole keyboard to play songs with.'}
+                          : 'Tap the red button, then say hello, cough, clap, sneeze or sing! It turns into a whole keyboard.'}
             </p>
           </div>
         </div>
@@ -199,39 +192,37 @@ export function SoundLab() {
         {mine.length > 0 && <p className="muted small tip">Tip: tap the picture on your chosen sound to change it.</p>}
       </div>
 
-      {tryIt && (
-        <div className="freeplay">
-          <div className="row octave-row">
-            <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
-              ◀ Lower
-            </button>
-            <span className="muted small">Play anything!</span>
-            <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
-              Higher ▶
-            </button>
-          </div>
-          <Keyboard
-            start={octave}
-            end={octave + 24}
-            pressed={down}
-            height="min(26dvh, 180px)"
-            onPress={(m) => {
-              voices.current.get(m)?.kill();
-              voices.current.set(m, noteOn(m, 0.75));
-              setDown((s) => new Set(s).add(m));
-            }}
-            onRelease={(m) => {
-              voices.current.get(m)?.release();
-              voices.current.delete(m);
-              setDown((s) => {
-                const n = new Set(s);
-                n.delete(m);
-                return n;
-              });
-            }}
-          />
+      <div className="freeplay">
+        <div className="row octave-row">
+          <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
+            ◀ Lower
+          </button>
+          <span className="muted small">Play anything!</span>
+          <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
+            Higher ▶
+          </button>
         </div>
-      )}
+        <Keyboard
+          start={octave}
+          end={octave + 24}
+          pressed={down}
+          height="min(34dvh, 240px)"
+          onPress={(m) => {
+            voices.current.get(m)?.kill();
+            voices.current.set(m, noteOn(m, 0.75));
+            setDown((s) => new Set(s).add(m));
+          }}
+          onRelease={(m) => {
+            voices.current.get(m)?.release();
+            voices.current.delete(m);
+            setDown((s) => {
+              const n = new Set(s);
+              n.delete(m);
+              return n;
+            });
+          }}
+        />
+      </div>
     </div>
   );
 }

@@ -35,7 +35,7 @@ Vite, React and TypeScript. The Web Audio API handles pitch detection (McLeod pi
 
 ## Keyboard sounds
 
-The piano's **Sounds** screen picks the keyboard sound used everywhere on the piano tab: a sampled grand piano, electric piano, organ, space synth, 8-bit robot and music box (all but the grand are synthesised in Web Audio). Kids can also record their own sound (a cough, clap or sung note). It is trimmed, saved in IndexedDB on the device, and pitch-shifted across the keys; a clearly sung note keeps its real pitch so the keyboard stays in tune.
+The **Keyboard** tab picks the keyboard sound (also selectable from the menu on a piano song screen): a sampled grand piano, electric piano, organ, space synth, 8-bit robot and music box (all but the grand are synthesised in Web Audio). Kids can also record their own sound (a cough, clap or sung note). It is trimmed, saved in IndexedDB on the device, and pitch-shifted across the keys; a clearly sung note keeps its real pitch so the keyboard stays in tune.
 
 ## Credits
 

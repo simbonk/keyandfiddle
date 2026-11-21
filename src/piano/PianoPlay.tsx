@@ -11,7 +11,7 @@ import { Keyboard, keyLayout, type KeyHighlight, type ShadowHand } from './Keybo
 import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
-import { SoundLab, SoundSelect } from './SoundLab';
+import { SoundSelect } from './SoundLab';
 import { PIANO_SONGS, tagHas } from './songs';
 
 type Mode = 'wait' | 'play' | 'demo';
@@ -43,7 +43,6 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null }: Props) {
       <SongPicker
         songs={songs}
         instrument="piano"
-        intro={<SoundLab />}
         onPick={setSong}
         badge={(s) => {
           const [a, b] = songRange(s, cal.startMidi);
