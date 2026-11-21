@@ -228,7 +228,9 @@ function TouchViolinPlay({
 
   // words and popups turn to face you: in the violin's frame, and on the screen
   const readDeg = opts.neckRight ? opts.readAngle : -opts.readAngle;
-  const screenDeg = (rot === "cw" ? 90 : rot === "ccw" ? -90 : 0) + readDeg;
+  // menus and buttons stay straight: upright on the screen (turned when held the other way)
+  const straightDeg = rot === "none" ? 0 : -90;
+  const screenDeg = rot === "ccw" ? 180 : 0;
   const angled = opts.readAngle >= 25;
 
   const bpm = song?.bpm ?? 80;
@@ -563,7 +565,9 @@ function TouchViolinPlay({
     <>
       <div
         className={`lesson touch-violin tv-full ${opts.neckTop ? "neck-top" : ""} ${rot !== "none" ? "tv-turned" : ""} ${angled ? "tv-angled" : ""}`}
-        style={{ ...frame, ["--tv-read" as string]: `${readDeg}deg` }}
+        style={{ ...frame, ["--tv-read" as string]: `${readDeg}deg`,
+          ["--tv-straight" as string]: `${straightDeg}deg`,
+        }}
       >
         <div className="game-bar">
           <button className="btn small ghost back" onClick={onExit} aria-label="Songs">
@@ -667,6 +671,13 @@ function TouchViolinPlay({
                         }
                       />
                       <b className="tv-angle-val">{opts.readAngle}°</b>
+                      <button
+                        className="btn small ghost"
+                        disabled={opts.readAngle === 60}
+                        onClick={() => setOpts((o) => ({ ...o, readAngle: 60 }))}
+                      >
+                        Reset
+                      </button>
                     </div>
                     <div className="opt-row">
                       <span>Sound</span>
@@ -878,7 +889,7 @@ function TouchViolinPlay({
                   ⏸
                 </button>
               )}
-              {cur && mode === "wait" && (
+              {cur && mode === "wait" && running && (
                 <div className="tv-now">
                   <b style={{ color: STRINGS[cur.fing.string].color }}>
                     {midiName(cur.midi)}

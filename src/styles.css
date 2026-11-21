@@ -2078,7 +2078,6 @@ select option {
   min-width: 3ch;
   text-align: right;
 }
-.tv-angled .game-bar > *,
 .tv-angled .tv-now,
 .tv-angled .bar-feedback .fb-pill,
 .tv-angled .tv-playing {
@@ -2091,8 +2090,9 @@ select option {
 .tv-angled .overlay-center > * {
   grid-area: 1 / 1;
 }
-.tv-angled .overlay-center > .tv-turn {
-  transform: rotate(var(--tv-read));
+.tv-angled .overlay-center > .tv-turn,
+.tv-turned .overlay-center > .tv-turn {
+  transform: rotate(var(--tv-straight));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2107,6 +2107,17 @@ select option {
 .tv-angled .game-bar .lbl {
   display: none;
 }
+.tv-turned .overlay-center {
+  display: grid;
+  place-items: center;
+}
+.tv-turned .overlay-center > * {
+  grid-area: 1 / 1;
+}
+.tv-turn p {
+  white-space: normal;
+  max-width: 300px;
+}
 .tv-angled .bar-feedback {
   position: relative;
   z-index: 5;
@@ -2117,11 +2128,20 @@ select option {
   display: inline-block;
   white-space: nowrap;
 }
-.tv-angled .game-bar > .seg {
+/* the controls stay straight (upright on the screen), only the playing view turns */
+.tv-turned .game-bar > * {
+  transform: rotate(var(--tv-straight));
+}
+.tv-turned .game-bar > .seg,
+.tv-turned .game-bar > .bar-feedback {
   transform: none;
 }
-.tv-angled .game-bar > .seg > button {
-  transform: rotate(var(--tv-read));
+.tv-turned .game-bar > .seg > button {
+  transform: rotate(var(--tv-straight));
+}
+.tv-turned .game-bar .lbl,
+.tv-turned .game-bar .game-title {
+  display: none;
 }
 /* the feedback pill floats into the music area, where there is room for it turned */
 .tv-angled.neck-top .bar-feedback .fb-pill,
@@ -2140,4 +2160,12 @@ select option {
 .tv-angled .fb-pill,
 .tv-angled .tv-playing {
   font-size: 22px;
+}
+.tv-turned .game-bar .score {
+  font-size: 14px;
+  white-space: nowrap;
+}
+.opts-pop.tv-opts-float {
+  width: min(560px, 90vw);
+  max-height: 85vh;
 }
