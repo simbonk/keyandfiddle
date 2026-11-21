@@ -1484,3 +1484,120 @@ select option {
   border-radius: 16px;
   background: linear-gradient(180deg, #1d1446, #140d33);
 }
+
+/* ---------- Sounds: keyboard sound picker + make-your-own sampler ---------- */
+.sound-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.sound-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border-radius: 16px;
+  border: 2px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.sound-card.on {
+  border-color: var(--primary);
+  background: rgba(255, 207, 51, 0.16);
+  box-shadow: 0 0 0 3px rgba(255, 207, 51, 0.25);
+}
+.sound-card.mine {
+  padding: 0;
+}
+.sound-pick {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.sound-emoji {
+  font-size: 38px;
+  line-height: 1.15;
+}
+.sound-del {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  border: 0;
+  background: #3a2d78;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 0 8px;
+  cursor: pointer;
+}
+.sound-del.sure {
+  background: #e5484d;
+}
+.sampler-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.sampler-head p {
+  margin: 4px 0 0;
+}
+.sampler .tip {
+  margin: 8px 0 0;
+}
+.rec-big {
+  --lvl: 0;
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.85);
+  background: #e5484d;
+  font-size: 36px;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 0 0 calc(var(--lvl) * 22px) rgba(229, 72, 77, 0.35);
+  transition: box-shadow 0.06s linear, transform 0.1s;
+}
+.rec-big:active {
+  transform: scale(0.94);
+}
+.rec-big.on {
+  background: #ff7a7f;
+  animation: rec-pulse 1s ease-in-out infinite alternate;
+}
+.rec-big:disabled {
+  opacity: 0.4;
+}
+@keyframes rec-pulse {
+  to {
+    border-color: var(--primary);
+  }
+}
+.octave-row {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePitchListener } from '../audio/hooks';
 import { mic } from '../audio/mic';
 import { midiName, pitchClassName, songLengthBeats, type Song } from '../audio/notes';
+import { type Voice, noteOn, preloadSound, getSound } from '../audio/instruments';
 import { playNote } from '../audio/synth';
 import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
@@ -10,6 +11,7 @@ import { Keyboard, keyLayout, type KeyHighlight, type ShadowHand } from './Keybo
 import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
+import { SoundSelect } from './SoundLab';
 import { PIANO_SONGS, tagHas } from './songs';
 
 type Mode = 'wait' | 'play' | 'demo';
@@ -72,6 +74,10 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   const [, force] = useState(0);
   const [touchDown, setTouchDown] = useState<Set<number>>(new Set());
   const [heard, setHeard] = useState<number | null>(null);
+  const voices = useRef(new Map<number, Voice>());
+  useEffect(() => {
+    preloadSound(getSound(), start, end);
+  }, [start, end]);
 
   const g = useRef({
     notes: [] as HwNote[],
@@ -322,7 +328,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
             n.state = 'hit';
             n.hitLevel = n.dyn === 'f' ? 1.6 : n.dyn === 'p' ? 0.4 : 1;
             n.holdFrac = 1;
-            playNote(n.midi, (n.beats * beatMs) / 1000, n.dyn === 'f' ? 1 : n.dyn === 'p' ? 0.35 : 0.7);
+            playNote(n.midi, (n.beats * beatMs) / 1000, n.dyn === 'f' ? 1 : n.dyn === 'p' ? 0.35 : 0.7, 'keys');
             st.bursts.push({ x: laneCenter(keys, n.midi), color: noteColor(n.midi), t0: now, power: n.hitLevel / 2 });
           }
         });
@@ -433,6 +439,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         >
           🖐<span className="lbl"> Fingers</span>
         </button>
+        <SoundSelect />
         <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
           <option value={0.5}>½×</option>
           <option value={0.75}>¾×</option>
@@ -514,7 +521,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         pressed={pressed}
         height="min(34dvh, 240px)"
         onPress={(m) => {
-          playNote(m, 1.2, 0.7);
+          voices.current.get(m)?.release();
+          voices.current.set(m, noteOn(m, 0.7));
           setTouchDown((s) => new Set(s).add(m));
           if (running && mode !== 'demo') {
             const now = performance.now();
@@ -524,6 +532,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
           }
         }}
         onRelease={(m) => {
+          voices.current.get(m)?.release();
+          voices.current.delete(m);
           setTouchDown((s) => {
             const n = new Set(s);
             n.delete(m);

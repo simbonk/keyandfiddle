@@ -1,20 +1,15 @@
 // Small WebAudio synth for reference tones, on-screen keys and replays.
 import { getAudioContext } from './mic';
 import { midiToFreq } from './notes';
+import { out } from './output';
+import { noteOn } from './instruments';
 
-export type Timbre = 'piano' | 'violin' | 'beep';
-
-let master: GainNode | null = null;
-function out(): GainNode {
-  const ctx = getAudioContext();
-  if (!master) {
-    master = ctx.createGain();
-    master.gain.value = 0.5;
-    const comp = ctx.createDynamicsCompressor();
-    master.connect(comp).connect(ctx.destination);
-  }
-  return master;
-}
+/**
+ * piano = the sampled grand (for tuning and reference tones),
+ * keys = whichever keyboard sound the child picked (grand, organ, their own sneeze...),
+ * synthPiano = the old built-in tone, used while samples load.
+ */
+export type Timbre = 'piano' | 'keys' | 'synthPiano' | 'violin' | 'beep';
 
 /** Play a note now (or at `when` seconds on the audio clock). Returns stop fn. */
 export function playNote(
@@ -28,12 +23,18 @@ export function playNote(
   const ctx = getAudioContext();
   if (ctx.state === 'suspended') ctx.resume();
   const t0 = when ?? ctx.currentTime;
+  if ((timbre === 'piano' || timbre === 'keys') && !isFreq) {
+    const v = noteOn(midiOrFreq, velocity, t0, timbre === 'piano' ? 'grand' : undefined);
+    v.release(t0 + duration);
+    return () => v.release();
+  }
+  if (timbre === 'piano' || timbre === 'keys') timbre = 'synthPiano';
   const f = isFreq ? midiOrFreq : midiToFreq(midiOrFreq);
   const g = ctx.createGain();
   g.connect(out());
   const nodes: AudioScheduledSourceNode[] = [];
 
-  if (timbre === 'piano') {
+  if (timbre === 'synthPiano') {
     const partials = [1, 2, 3, 4, 5];
     const amps = [1, 0.45, 0.22, 0.12, 0.06];
     partials.forEach((p, i) => {

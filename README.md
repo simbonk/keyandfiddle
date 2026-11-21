@@ -32,3 +32,11 @@ Import the repo in Vercel. `vercel.json` sets the Vite build. The MediaPipe WASM
 ## Stack
 
 Vite, React and TypeScript. The Web Audio API handles pitch detection (McLeod pitch method) and a small synth. Canvas 2D draws the highways and AR overlays. `@mediapipe/tasks-vision` provides hand and pose landmarks.
+
+## Keyboard sounds
+
+The piano's **Sounds** screen picks the keyboard sound used everywhere on the piano tab: a sampled grand piano, electric piano, organ, space synth, 8-bit robot and music box (all but the grand are synthesised in Web Audio). Kids can also record their own sound (a cough, clap or sung note). It is trimmed, saved in IndexedDB on the device, and pitch-shifted across the keys; a clearly sung note keeps its real pitch so the keyboard stays in tune.
+
+## Credits
+
+Grand piano samples: [Salamander Grand Piano V3](https://archive.org/details/SalamanderGrandPianoV3) by Alexander Holm, licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Trimmed to a few seconds, mono 64 kbps, in `public/samples/piano/`; they load only for the keys in use.

@@ -178,7 +178,7 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
     stopPlayback();
     const ctx = getAudioContext();
     const t = ctx.currentTime + 0.1;
-    stopFns.current = r.notes.map((n) => playNote(n.midi, n.dur, 0.3 + n.vel * 0.7, 'piano', t + n.start));
+    stopFns.current = r.notes.map((n) => playNote(n.midi, n.dur, 0.3 + n.vel * 0.7, 'keys', t + n.start));
     playStart.current = performance.now() + 100;
     setPlaying(true);
   };
