@@ -746,7 +746,37 @@ function findTies(b: Bin, notes: OmrNote[], s: number) {
   }
 }
 
-export function recognize(g: Gray): OmrResult {
+/**
+ * Paint dark borders (a screenshot of a page shown on a dark background, or the
+ * table around a photographed sheet) white, so they don't skew the threshold
+ * or look like ink.
+ */
+function whitenBorders(g: Gray): Gray {
+  const { w, h } = g;
+  const data = new Uint8Array(g.data);
+  const dark = (i: number) => g.data[i] < 110;
+  const colDark = (x: number) => {
+    let n = 0;
+    for (let y = 0; y < h; y++) if (dark(y * w + x)) n++;
+    return n > h * 0.6;
+  };
+  const rowDark = (y: number) => {
+    let n = 0;
+    for (let x = 0; x < w; x++) if (dark(y * w + x)) n++;
+    return n > w * 0.6;
+  };
+  const paint = (x0: number, x1: number, y0: number, y1: number) => {
+    for (let y = y0; y < y1; y++) data.fill(255, y * w + x0, y * w + x1);
+  };
+  for (let x = 0; x < w && colDark(x); x++) paint(x, x + 1, 0, h);
+  for (let x = w - 1; x >= 0 && colDark(x); x--) paint(x, x + 1, 0, h);
+  for (let y = 0; y < h && rowDark(y); y++) paint(0, w, y, y + 1);
+  for (let y = h - 1; y >= 0 && rowDark(y); y--) paint(0, w, y, y + 1);
+  return { w, h, data };
+}
+
+export function recognize(g0: Gray): OmrResult {
+  const g = whitenBorders(g0);
   const thr = Math.min(200, otsu(g));
   const bin = new Uint8Array(g.w * g.h);
   for (let i = 0; i < bin.length; i++) bin[i] = g.data[i] <= thr ? 1 : 0;
