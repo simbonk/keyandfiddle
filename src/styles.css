@@ -1426,3 +1426,61 @@ select option {
   padding: 8px;
   border-radius: 12px;
 }
+
+/* voice */
+.ladder {
+  width: 100%;
+  display: block;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #1d1446, #140d33);
+}
+.voice-hint {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  min-height: 34px;
+}
+.voice-hint.good {
+  color: #52d273;
+}
+.voice-hint.up,
+.voice-hint.down {
+  color: #ff9f1c;
+}
+.hold-bar {
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.hold-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, #52d273, #ffcf33);
+  transition: width 0.1s linear;
+}
+.solfege-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.solfege-row span {
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 800;
+}
+.solfege-row span.done {
+  background: rgba(82, 210, 115, 0.35);
+}
+.solfege-row span.now {
+  background: #ffcf33;
+  color: #1a0f3d;
+}
+.sing-canvas {
+  width: 100%;
+  height: max(240px, calc(100dvh - 150px));
+  display: block;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #1d1446, #140d33);
+}

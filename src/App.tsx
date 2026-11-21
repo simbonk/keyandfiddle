@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { PianoTab } from './piano/PianoTab';
 import { ChromeContext, FullscreenButton } from './ui/chrome';
 import { ViolinTab } from './violin/ViolinTab';
+import { VoiceTab } from './voice/VoiceTab';
 
-type Tab = 'piano' | 'violin';
+type Tab = 'piano' | 'violin' | 'voice';
 
 export function App() {
   const [tab, setTab] = useState<Tab>(() => {
@@ -42,11 +43,14 @@ export function App() {
             <button role="tab" aria-selected={tab === 'violin'} className={tab === 'violin' ? 'on' : ''} onClick={() => pick('violin')}>
               🎻<span className="lbl"> Violin</span>
             </button>
+            <button role="tab" aria-selected={tab === 'voice'} className={tab === 'voice' ? 'on' : ''} onClick={() => pick('voice')}>
+              🎤<span className="lbl"> Voice</span>
+            </button>
           </nav>
           <div className="subnav-slot" ref={setSlot} />
           <FullscreenButton className="btn small ghost fs-top" />
         </header>
-        <main className="main">{tab === 'piano' ? <PianoTab /> : <ViolinTab />}</main>
+        <main className="main">{tab === 'piano' ? <PianoTab /> : tab === 'violin' ? <ViolinTab /> : <VoiceTab />}</main>
       </div>
     </ChromeContext.Provider>
   );

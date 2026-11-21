@@ -51,3 +51,20 @@ describe('fingering', () => {
     }
   });
 });
+
+import { VOICE_SONGS, fitShift, foldToTarget } from '../voice/voice';
+describe('voice', () => {
+  it('every sing-along song has one lyric per note', () => {
+    for (const s of VOICE_SONGS) expect(s.notes.every((n) => n.lyric && n.midi !== null)).toBe(true);
+  });
+  it('counts the right note in another octave', () => {
+    expect(foldToTarget(48.2, 60)).toBeCloseTo(60.2);
+    expect(foldToTarget(71.6, 60)).toBeCloseTo(59.6);
+  });
+  it('moves a song into the singer range', () => {
+    const notes = [{ midi: 60 }, { midi: 67 }];
+    const sh = fitShift(notes, { lo: 43, hi: 60 });
+    expect(60 + sh).toBeGreaterThanOrEqual(43);
+    expect(67 + sh).toBeLessThanOrEqual(60);
+  });
+});
