@@ -6,7 +6,30 @@ import { type MySound, saveMySound } from '../audio/sampler';
  * Shows the recorded sound as a wave. Drag the yellow handles to cut off the
  * start or end; the cut-off parts stay saved, so dragging back undoes it.
  */
-export function SampleEditor({ sound, onDelete }: { sound: MySound; onDelete: () => void }) {
+export function SampleEditor({
+  sound,
+  onDelete,
+  askName = false,
+}: {
+  sound: MySound;
+  onDelete: () => void;
+  /** Just recorded: put the cursor in the name box so they can name it straight away. */
+  askName?: boolean;
+}) {
+  const [name, setName] = useState(sound.name);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => setName(sound.name), [sound.id, sound.name]);
+  useEffect(() => {
+    if (askName) {
+      nameRef.current?.focus();
+      nameRef.current?.select();
+    }
+  }, [askName, sound.id]);
+  const saveName = () => {
+    const n = name.trim().slice(0, 24);
+    if (!n) return setName(sound.name);
+    if (n !== sound.name) saveMySound({ ...sound, name: n });
+  };
   const canvas = useRef<HTMLCanvasElement>(null);
   const len = sound.data.length;
   const [a, setA] = useState(sound.trimStart ?? 0);
@@ -70,6 +93,21 @@ export function SampleEditor({ sound, onDelete }: { sound: MySound; onDelete: ()
 
   return (
     <div className="sample-editor">
+      <label className="name-row">
+        <span>✏️ Name</span>
+        <input
+          ref={nameRef}
+          value={name}
+          maxLength={24}
+          placeholder="Give it a name"
+          enterKeyHint="done"
+          onChange={(e) => setName(e.target.value)}
+          onBlur={saveName}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+        />
+      </label>
       <div className="muted small sample-editor-help">✂️ Drag the yellow handles to trim your sound</div>
       <canvas
         ref={canvas}

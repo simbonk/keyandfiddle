@@ -46,6 +46,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
   const sound = useKeyboardSound();
   const mine = useMySounds();
   const [rec, setRec] = useState<RecState>('idle');
+  const [justMade, setJustMade] = useState<string | null>(null);
   const [level, setLevel] = useState(0);
   const recHandle = useRef<ReturnType<typeof recordSound> | null>(null);
   const [undo, setUndo] = useState<{ sound: MySound; wasSelected: boolean } | null>(null);
@@ -100,6 +101,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
       return;
     }
     setRec('idle');
+    setJustMade(r.sound.id);
     setSound(`mine:${r.sound.id}`);
     preview(`mine:${r.sound.id}`);
   };
@@ -182,7 +184,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
         )}
         {(() => {
           const sel = mine.find((m) => sound === `mine:${m.id}`);
-          return sel ? <SampleEditor sound={sel} onDelete={() => remove(sel)} /> : null;
+          return sel ? <SampleEditor sound={sel} onDelete={() => remove(sel)} askName={justMade === sel.id} /> : null;
         })()}
         {undo && (
           <div className="toast undo-toast">
@@ -192,7 +194,11 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
             </button>
           </div>
         )}
-        {mine.length > 0 && <p className="muted small tip">Tip: tap the picture on your chosen sound to change it.</p>}
+        {mine.length > 0 && (
+          <p className="muted small tip">
+            Tip: tap the picture on your chosen sound to change it, and type a name above the wave.
+          </p>
+        )}
       </div>
 
       {keys && <FreeKeys />}
