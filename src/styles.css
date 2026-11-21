@@ -2352,3 +2352,10 @@ select option {
     font-size: 34px;
   }
 }
+.tempo-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}

@@ -5,7 +5,7 @@ import { useSyncExternalStore } from 'react';
 import { getAudioContext } from './mic';
 import { midiToFreq } from './notes';
 import { out } from './output';
-import { loadMySounds, mySoundBuffer } from './sampler';
+import { keepTempo, loadMySounds, mySoundBuffer, shiftedBuffer, warmShifts } from './sampler';
 import { playNote } from './synth';
 
 export type BuiltInSound = 'grand' | 'epiano' | 'organ' | 'synth' | 'chip' | 'musicbox';
@@ -203,7 +203,10 @@ function loadPianoSample(root: number): Promise<void> {
 
 /** Fetch what a sound needs for keys lo..hi ahead of time (only the grand piano needs files). */
 export function preloadSound(sound: SoundId, lo = 48, hi = 84): Promise<void> {
-  if (sound.startsWith('mine:')) return loadMySounds().then(() => undefined);
+  if (sound.startsWith('mine:'))
+    return loadMySounds().then(() => {
+      warmShifts(sound.slice(5), lo, hi);
+    });
   if (sound !== 'grand') return Promise.resolve();
   const roots = new Set<number>();
   for (let m = lo; m <= hi; m++) roots.add(sampleRoot(m));
@@ -414,8 +417,11 @@ function mine(id: string, midi: number, v: number, t0: number): Voice {
   if (!s) return grand(midi, v, t0);
   const ctx = getAudioContext();
   const src = ctx.createBufferSource();
-  src.buffer = s.buf;
-  src.playbackRate.value = Math.max(0.0625, Math.min(16, 2 ** ((midi - s.root) / 12)));
+  const semis = Math.max(-48, Math.min(48, midi - s.root));
+  // Same speed on every key: use a copy stretched in time, so playing it faster
+  // (higher) or slower (lower) lands back at the original length. Chords line up.
+  src.buffer = (keepTempo() && shiftedBuffer(id, semis)) || s.buf;
+  src.playbackRate.value = 2 ** (semis / 12);
   const g = envGain();
   src.connect(g);
   const peak = 0.35 + 0.35 * v;

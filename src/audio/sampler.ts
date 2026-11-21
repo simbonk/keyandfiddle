@@ -3,6 +3,7 @@
 import { getAudioContext, mic, newCaptureContext } from './mic';
 import { freqToMidiFloat } from './notes';
 import { PitchDetector } from './pitch';
+import { stretch } from './stretch';
 
 export interface MySound {
   id: string;
@@ -104,6 +105,7 @@ export function loadMySounds(): Promise<MySound[]> {
 export async function saveMySound(s: MySound) {
   await tx('readwrite', (st) => st.put(s));
   bufCache.delete(s.id);
+  shiftCache.delete(s.id);
   sounds = [...sounds.filter((x) => x.id !== s.id), s].sort((a, b) => a.created - b.created);
   emit();
 }
@@ -111,6 +113,7 @@ export async function deleteMySound(id: string) {
   await tx('readwrite', (st) => st.delete(id));
   sounds = sounds.filter((x) => x.id !== id);
   bufCache.delete(id);
+  shiftCache.delete(id);
   emit();
 }
 
@@ -131,6 +134,70 @@ export function mySoundBuffer(id: string): { buf: AudioBuffer; root: number } | 
     bufCache.set(id, b);
   }
   return { buf: b, root: s.root };
+}
+
+// ---------- same speed on every key ----------
+
+/** Keep a recorded sound the same length on every key (true), or let higher keys play faster like a tape (false). */
+export function keepTempo(): boolean {
+  try {
+    return localStorage.getItem('kf.keepTempo') !== '0';
+  } catch {
+    return true;
+  }
+}
+export function setKeepTempo(on: boolean) {
+  try {
+    localStorage.setItem('kf.keepTempo', on ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+  emit();
+}
+
+const shiftCache = new Map<string, Map<number, AudioBuffer>>();
+/**
+ * The sound stretched so that, played back `2^(semis/12)` times faster, it is
+ * pitched up by `semis` but lasts exactly as long as the original. Made once per key.
+ */
+export function shiftedBuffer(id: string, semis: number): AudioBuffer | null {
+  const base = mySoundBuffer(id);
+  if (!base) return null;
+  const key = Math.round(semis * 100);
+  if (key === 0) return base.buf;
+  let m = shiftCache.get(id);
+  if (!m) shiftCache.set(id, (m = new Map()));
+  let b = m.get(key);
+  if (!b) {
+    const ratio = 2 ** (key / 1200);
+    const y = stretch(base.buf.getChannelData(0), ratio, base.buf.sampleRate);
+    b = getAudioContext().createBuffer(1, y.length, base.buf.sampleRate);
+    b.getChannelData(0).set(y);
+    if (m.size > 60) m.delete(m.keys().next().value!);
+    m.set(key, b);
+  }
+  return b;
+}
+
+/** Prepare keys lo..hi in the background so the first press of each is instant. */
+let warmTimer = 0;
+export function warmShifts(id: string, lo: number, hi: number) {
+  clearTimeout(warmTimer);
+  const s = sounds.find((x) => x.id === id);
+  if (!s || !keepTempo()) return;
+  const order: number[] = [];
+  const mid = Math.round(s.root);
+  for (let d = 0; d <= Math.max(mid - lo, hi - mid); d++) {
+    if (mid + d <= hi && mid + d >= lo) order.push(mid + d);
+    if (d && mid - d >= lo && mid - d <= hi) order.push(mid - d);
+  }
+  const step = () => {
+    const m = order.shift();
+    if (m === undefined) return;
+    shiftedBuffer(id, m - s.root);
+    warmTimer = window.setTimeout(step, 15);
+  };
+  warmTimer = window.setTimeout(step, 50);
 }
 
 /** The part of a sound that plays, with tiny fades so trimmed edges don't click. */
@@ -187,7 +254,7 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
       }
     }
     const ctx = cap ?? getAudioContext();
-    await ctx.resume().catch(() => undefined);
+    ctx.resume().catch(() => undefined); // not awaited: can stay pending on iPads
 
     // backup copy of the raw mic, independent of Web Audio
     let rec: MediaRecorder | null = null;

@@ -17,8 +17,10 @@ import {
   loadMySounds,
   mySounds,
   onMySoundsChange,
+  keepTempo,
   recordSound,
   saveMySound,
+  setKeepTempo,
 } from '../audio/sampler';
 import { Keyboard } from './Keyboard';
 import { SampleEditor } from './SampleEditor';
@@ -67,7 +69,8 @@ export function SoundLab({
   const keySound = useKeyboardSound();
   const sound = value ?? keySound;
   const setSound = (id: string) => (onSelect ? onSelect(id) : setKeySound(id as SoundId));
-  const hear = (id: string) => (onPreview ? onPreview(id) : preloadSound(id as SoundId).then(() => preview(id as SoundId)));
+  const hear = (id: string) =>
+    onPreview ? onPreview(id) : preloadSound(id as SoundId).then(() => preview(id as SoundId));
   const mine = useMySounds();
   const [rec, setRec] = useState<RecState>('idle');
   const [justMade, setJustMade] = useState<string | null>(null);
@@ -208,7 +211,12 @@ export function SoundLab({
         )}
         {(() => {
           const sel = mine.find((m) => sound === `mine:${m.id}`);
-          return sel ? <SampleEditor sound={sel} onDelete={() => remove(sel)} askName={justMade === sel.id} /> : null;
+          return sel ? (
+            <>
+              <SampleEditor sound={sel} onDelete={() => remove(sel)} askName={justMade === sel.id} />
+              <TempoChoice />
+            </>
+          ) : null;
         })()}
         {undo && (
           <div className="toast undo-toast">
@@ -226,6 +234,28 @@ export function SoundLab({
       </div>
 
       {keys && <FreeKeys />}
+    </div>
+  );
+}
+
+/** Same length on every key (chords line up), or tape-style faster-when-higher. */
+function TempoChoice() {
+  const [on, setOn] = useState(keepTempo);
+  const set = (v: boolean) => {
+    setKeepTempo(v);
+    setOn(v);
+  };
+  return (
+    <div className="tempo-choice">
+      <span className="muted small">Higher keys:</span>
+      <div className="seg">
+        <button className={on ? 'on' : ''} onClick={() => set(true)}>
+          🎵 Same speed
+        </button>
+        <button className={!on ? 'on' : ''} onClick={() => set(false)}>
+          🐿️ Faster
+        </button>
+      </div>
     </div>
   );
 }

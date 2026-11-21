@@ -42,6 +42,7 @@ export class MicEngine {
   private analyser: AnalyserNode | null = null;
   private boostNode: GainNode | null = null;
   private zeroSince = 0;
+  private fellBack = false;
   /** Extra software gain on the mic before listening (quiet iPad mics). */
   boost = savedBoost();
   private buf: Float32Array<ArrayBuffer> = new Float32Array(2048);
@@ -84,29 +85,31 @@ export class MicEngine {
       try {
         // The mic gets its own fresh audio context, made right here in the tap.
         // Sharing the playback context made iPads feed the app silence from the
-        // mic once some sound had already played.
-        const ctx = newCaptureContext() ?? getAudioContext();
-        await ctx.resume().catch(() => undefined);
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
-        const src = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0;
-        const boost = ctx.createGain();
-        boost.gain.value = this.boost;
-        this.boostNode = boost;
-        src.connect(boost).connect(analyser);
-        this.ctx = ctx;
+        // mic once some sound had already played. If that context misbehaves we
+        // fall back to the shared one (see attach and the watchdog in tick).
+        const fresh = newCaptureContext();
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          });
+        } catch (e) {
+          const n = (e as DOMException)?.name;
+          if (n === 'NotAllowedError' || n === 'SecurityError') throw e;
+          // some devices refuse the detailed request: ask for any mic at all
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
         this.stream = stream;
-        this.analyser = analyser;
-        this.buf = new Float32Array(analyser.fftSize);
-        this.detector = new PitchDetector(analyser.fftSize, ctx.sampleRate, 60, 2100);
+        this.fellBack = false;
+        this.zeroSince = 0;
+        try {
+          if (!fresh) throw new Error('no fresh context');
+          this.attach(fresh);
+        } catch {
+          fresh?.close().catch(() => undefined);
+          this.fellBack = true;
+          this.attach(getAudioContext());
+        }
         this.setStatus('running');
         this.loop();
       } catch (e) {
@@ -114,13 +117,33 @@ export class MicEngine {
         if (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError')) {
           this.setStatus('denied', 'Microphone permission was blocked.');
         } else {
-          this.setStatus('error', String(err?.message ?? e));
+          this.setStatus('error', `${err?.name ?? 'Error'}: ${String(err?.message ?? e)}`);
         }
       } finally {
         this.starting = null;
       }
     })();
     return this.starting;
+  }
+
+  /** Wire the mic stream into `ctx` for listening (replacing any earlier wiring). */
+  private attach(ctx: AudioContext) {
+    if (!this.stream) return;
+    if (this.ctx && this.ctx !== ctx && this.ctx !== sharedCtx) this.ctx.close().catch(() => undefined);
+    // don't wait on resume(): on iPads it can stay pending until audio actually flows
+    ctx.resume().catch(() => undefined);
+    const src = ctx.createMediaStreamSource(this.stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0;
+    const boost = ctx.createGain();
+    boost.gain.value = this.boost;
+    this.boostNode = boost;
+    src.connect(boost).connect(analyser);
+    this.ctx = ctx;
+    this.analyser = analyser;
+    this.buf = new Float32Array(analyser.fftSize);
+    this.detector = new PitchDetector(analyser.fftSize, ctx.sampleRate, 60, 2100);
   }
 
   /**
@@ -200,7 +223,18 @@ export class MicEngine {
       }
     if (nonzero || !this.zeroSince) this.zeroSince = nonzero ? 0 : now;
     const ended = this.stream?.getAudioTracks().every((t) => t.readyState === 'ended');
-    if (ended || (this.zeroSince && now - this.zeroSince > 2000)) {
+    if (!ended && this.zeroSince && now - this.zeroSince > 1500 && !this.fellBack) {
+      // the fresh context gives nothing: try the shared one before giving up
+      this.fellBack = true;
+      this.zeroSince = 0;
+      try {
+        this.attach(getAudioContext());
+      } catch {
+        /* handled by the check below next time */
+      }
+      return;
+    }
+    if (ended || (this.zeroSince && now - this.zeroSince > 2500)) {
       this.stop();
       this.setStatus('error', "The microphone stopped sending sound. Tap 'Turn on microphone' to start it again.");
       return;

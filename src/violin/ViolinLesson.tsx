@@ -231,7 +231,9 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
       if (mic.status === 'running') setMicErr(null);
       else {
         setMicErr(
-          "I couldn't turn on the microphone. Allow the mic for this site (Settings app → Safari → Microphone), or use 👂 Listen.",
+          mic.status === 'denied'
+            ? "The microphone is blocked. Allow it for this site (Settings app → Safari → Microphone), or use 👂 Listen."
+            : `I couldn't start the microphone (${mic.error || 'no answer'}). Tap Start to try again, or use 👂 Listen.`,
         );
         return;
       }
