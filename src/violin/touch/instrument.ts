@@ -470,18 +470,40 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   const d = L.d;
   const lo = Math.min(strike, far);
   const span = Math.abs(far - strike);
-  // Notes slide in along tracks slanted toward the scroll, the way a player
-  // holding the iPad like a violin looks up the neck (follows the word angle).
+  const right = L.pad.x - 6;
+  // One track per string, in the string's colour, side by side like the
+  // strings (E, A, D, G from left to right as the player sees them). The
+  // tracks slant toward the scroll, the way a player holding the iPad like a
+  // violin looks up the neck (they follow the word angle). Each note slides
+  // down its string's track onto the landing line; the finger number on it
+  // says where to press, and a dotted line leads to that spot.
   const phi = Math.min(0.96, Math.max(0, -readRot));
   const ux = Math.sin(phi);
   const uy = d * Math.cos(phi);
-  // across the track
+  // across the tracks, toward the G string's side
   const vx = Math.cos(phi);
   const vy = -d * Math.sin(phi);
-  const trackLen = span / Math.cos(phi);
+  const LANE = 66;
+  const W = 54; // note thickness
+  const r = 21; // badge radius
+  const off = (s: number) => (1.5 - s) * LANE;
+  const cy = strike + d * Math.max(1.5 * LANE * Math.abs(vy) + 34, span * 0.22);
+  const cx = L.x0 + 1.5 * LANE * vx + Math.min(190, (right - L.x0) * 0.2);
+  const start = (s: number): [number, number] => [cx + vx * off(s), cy + vy * off(s)];
+  const at = (s: number, t: number, across = 0): [number, number] => {
+    const [px, py] = start(s);
+    return [px + ux * t + vx * across, py + uy * t + vy * across];
+  };
+  // runway: as far as every track can go before leaving the music area
+  const edgeY = d > 0 ? lo + span : lo;
+  let trackLen = Infinity;
+  for (let s = 0; s < 4; s++) {
+    const [px, py] = start(s);
+    if (ux > 0.01) trackLen = Math.min(trackLen, (right - W / 2 - px) / ux);
+    trackLen = Math.min(trackLen, (edgeY - py) / uy);
+  }
+  trackLen = Math.max(120, trackLen);
   const ppb = trackLen / f.visibleBeats;
-  const at = (hx: number, t: number, s = 0): [number, number] => [hx + ux * t + vx * s, strike + uy * t + vy * s];
-  const right = L.pad.x - 6;
 
   ctx.save();
   // only the music area: not over the bow column
@@ -489,28 +511,41 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   ctx.rect(L.x0, lo, right - L.x0, span);
   ctx.clip();
 
-  // track guides: open strings and the four finger tapes
-  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
-  ctx.lineWidth = 2;
-  for (const hx of [L.openX, ...TAPES.map(([s]) => L.semisX(s))]) {
+  // the four tracks
+  for (let s = 0; s < 4; s++) {
+    const col = STRINGS[s].color;
+    const q = [at(s, 0, -LANE / 2 + 3), at(s, 0, LANE / 2 - 3), at(s, trackLen * 2, LANE / 2 - 3), at(s, trackLen * 2, -LANE / 2 + 3)];
     ctx.beginPath();
-    ctx.moveTo(hx, strike);
-    ctx.lineTo(...at(hx, trackLen));
+    ctx.moveTo(...q[0]);
+    for (const p of q.slice(1)) ctx.lineTo(...p);
+    ctx.closePath();
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.globalAlpha = 1;
   }
-  // beat lines (a beat is the same distance along every track, so they stay level)
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-  for (let bt = Math.ceil(f.songBeat); bt < f.songBeat + f.visibleBeats; bt++) {
-    const y = strike + uy * (bt - f.songBeat) * ppb;
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(L.x0, lo, right - L.x0, span);
+  ctx.clip();
+
+  // beat ticks across the tracks
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 2;
+  for (let bt = Math.ceil(f.songBeat); bt < f.songBeat + f.visibleBeats * 1.5; bt++) {
+    const t = (bt - f.songBeat) * ppb;
     ctx.beginPath();
-    ctx.moveTo(L.x0, y);
-    ctx.lineTo(right, y);
+    ctx.moveTo(...at(3, t, -LANE / 2));
+    ctx.lineTo(...at(0, t, LANE / 2));
     ctx.stroke();
   }
 
-  const W = 56; // gem thickness
-  const r = 21; // badge radius
-  const vis = f.notes.filter((n) => n.beat + n.beats > f.songBeat - 0.2 && n.beat < f.songBeat + f.visibleBeats * 1.4);
+  const vis = f.notes.filter((n) => n.beat + n.beats > f.songBeat - 0.2 && n.beat < f.songBeat + f.visibleBeats * 1.6);
   for (const n of vis) {
     const isCur = f.current === n;
     let a = n.beat - f.songBeat;
@@ -518,21 +553,21 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
     const b = n.beat + n.beats - f.songBeat - 0.06;
     if (b <= a) continue;
     const t0 = a * ppb;
-    const t1 = Math.min(trackLen * 1.4, b * ppb);
-    const semis = n.fing.semis;
-    const hx = semis === 0 ? L.openX : L.semisX(semis);
+    const t1 = Math.min(trackLen * 1.7, b * ppb);
+    const s = n.fing.string;
+    const col = STRINGS[s].color;
     ctx.globalAlpha = n.state === 'hit' ? 0.3 : 1;
 
-    // ---- the note gem, sliding along its track onto the landing line ----
-    const c = [at(hx, t0, -W / 2), at(hx, t0, W / 2), at(hx, t1, W / 2), at(hx, t1, -W / 2)];
+    // ---- the note, sliding down its string's track ----
+    const c = [at(s, t0, -W / 2), at(s, t0, W / 2), at(s, t1, W / 2), at(s, t1, -W / 2)];
     ctx.beginPath();
     ctx.moveTo(...c[0]);
     for (const q of c.slice(1)) ctx.lineTo(...q);
     ctx.closePath();
-    ctx.fillStyle = STRINGS[n.fing.string].color;
+    ctx.fillStyle = col;
     ctx.lineJoin = 'round';
     ctx.lineWidth = 10;
-    ctx.strokeStyle = STRINGS[n.fing.string].color;
+    ctx.strokeStyle = col;
     ctx.stroke();
     ctx.fill();
     if (isCur) {
@@ -542,7 +577,7 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
     }
     const len = t1 - t0;
     const badge = (t: number, fill: string, stroke: string, text: string, ink: string) => {
-      const [bx, by] = at(hx, t);
+      const [bx, by] = at(s, t);
       ctx.beginPath();
       ctx.arc(bx, by, r, 0, Math.PI * 2);
       ctx.fillStyle = fill;
@@ -557,49 +592,65 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
       ctx.fillText(text, bx, by + 1);
       ctx.textBaseline = 'alphabetic';
     };
-    // finger number at the front, then the string letter, then the bow sign
+    // finger number at the front, then the note name, then the bow sign
+    const fg = n.fing.finger;
     if (len > r * 2 + 6 || n.state !== 'hit') {
-      const fg = n.fing.finger;
       badge(t0 + r + 6, fg === 0 ? '#10082a' : FINGER_COLORS[fg], '#fff', fg === 0 ? 'O' : String(fg), fg === 0 ? '#fff' : '#10082a');
     }
     if (len > r * 4 + 14) {
-      const [sx, sy] = at(hx, t0 + r * 3 + 12);
+      const [nx, ny] = at(s, t0 + r * 3 + 12);
       ctx.fillStyle = '#10082a';
-      ctx.font = `800 ${Math.round(r * 1.6)}px ${FONT}`;
+      ctx.font = `800 ${Math.round(r * 1.3)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(STRINGS[n.fing.string].name, sx, sy + 1);
+      ctx.fillText(midiName(n.midi).replace(/\d/, ''), nx, ny + 1);
       ctx.textBaseline = 'alphabetic';
     }
     if (len > r * 6 + 22) {
       const down = n.bow.dir === 'down';
       badge(t0 + r * 5 + 18, down ? DOWN : UP, '#10082a', down ? '⊓' : 'V', '#10082a');
     }
-    // the next note: a moving dotted line from the gem to the spot to press
-    if (isCur && n.state !== 'hit') {
-      const ty = L.stringY(n.fing.string, Math.max(L.nutX, hx));
-      ctx.save();
-      ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([6, 8]);
-      ctx.lineDashOffset = (-now / 25) * d;
-      ctx.beginPath();
-      ctx.moveTo(...at(hx, t0));
-      ctx.lineTo(hx, strike);
-      ctx.lineTo(hx, ty);
-      ctx.stroke();
-      ctx.restore();
-    }
     ctx.globalAlpha = 1;
   }
   ctx.restore();
 
-  // landing line
+  // landing line across the four tracks, and where each track's note is pressed
   const pulse = f.waiting ? 0.55 + 0.4 * Math.sin(now / 150) : 0.55;
-  ctx.fillStyle = f.waiting ? `rgba(255,214,10,${pulse})` : 'rgba(255,255,255,0.5)';
-  ctx.fillRect(L.x0, strike - 2, L.fbEnd - L.x0, 4);
-  ctx.fillRect(L.pad.x, strike - 2, L.pad.w, 4);
+  ctx.strokeStyle = f.waiting ? `rgba(255,214,10,${pulse})` : 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(...at(3, 0, -LANE / 2));
+  ctx.lineTo(...at(0, 0, LANE / 2));
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  const cur = f.current;
+  for (let s = 0; s < 4; s++) {
+    const [px, py] = at(s, 0);
+    // string letter at the end of each track
+    ctx.fillStyle = STRINGS[s].color;
+    ctx.font = `800 22px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const [lx, ly] = at(s, -26);
+    ctx.fillText(STRINGS[s].name, lx, ly);
+    ctx.textBaseline = 'alphabetic';
+    // the next note: a moving dotted line from its track to the spot to press
+    if (cur && cur.state !== 'hit' && cur.fing.string === s) {
+      const hx = cur.fing.semis === 0 ? L.openX : L.semisX(cur.fing.semis);
+      const ty = L.stringY(s, Math.max(L.nutX, hx));
+      ctx.save();
+      ctx.strokeStyle = STRINGS[s].color;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([8, 9]);
+      ctx.lineDashOffset = -now / 25;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(hx, ty);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }
 
 /**
