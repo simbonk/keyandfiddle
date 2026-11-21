@@ -39,6 +39,7 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null }: Props) {
     return (
       <SongPicker
         songs={songs}
+        instrument="piano"
         onPick={setSong}
         badge={(s) => {
           const [a, b] = songRange(s, cal.startMidi);

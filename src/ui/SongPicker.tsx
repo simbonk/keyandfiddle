@@ -1,4 +1,6 @@
+import { useRef, useState } from 'react';
 import type { Song } from '../audio/notes';
+import { addScoreFile, removeScore, scoreToSong, useImportedScores } from './importedSongs';
 
 const LEVELS: { level: 1 | 2 | 3; name: string; emoji: string }[] = [
   { level: 1, name: 'Beginner', emoji: '🌱' },
@@ -12,13 +14,34 @@ export function SongPicker({
   intro,
   extraTitle = 'Your recordings',
   badge,
+  instrument,
 }: {
   songs: Song[];
   onPick: (s: Song) => void;
   intro?: React.ReactNode;
   extraTitle?: string;
   badge?: (s: Song) => string | null;
+  /** Show "import sheet music" and the user's imported songs for this instrument. */
+  instrument?: 'piano' | 'violin';
 }) {
+  const scores = useImportedScores();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  const onFile = async (f: File | undefined) => {
+    if (!f) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const s = await addScoreFile(f);
+      setMsg({ text: `Added “${s.title}” (${s.notes.length} notes). Tap it below to play.`, bad: false });
+    } catch (e) {
+      setMsg({ text: (e as Error).message || "I couldn't read that file.", bad: true });
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
   const own = songs.filter((s) => s.id.startsWith('rec-'));
   const groups = LEVELS.map((l) => ({ ...l, songs: songs.filter((s) => s.level === l.level && !s.id.startsWith('rec-')) }));
   const card = (s: Song) => {
@@ -50,6 +73,41 @@ export function SongPicker({
             <div className="song-grid">{g.songs.map(card)}</div>
           </section>
         ))}
+      {instrument && (
+        <section className="song-group">
+          <h3>📄 Your sheet music</h3>
+          <div className="song-grid">
+            {scores.map((sc) => {
+              const song = scoreToSong(sc, instrument);
+              return (
+                <div key={sc.id} className="song-card-wrap">
+                  {card(song)}
+                  <button
+                    className="song-del"
+                    aria-label={`Remove ${sc.title}`}
+                    onClick={() => {
+                      if (window.confirm(`Remove “${sc.title}”?`)) removeScore(sc.id);
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
+            <button className="song-card import-card" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <span className="song-emoji">{busy ? '⏳' : '➕'}</span>
+              <b>Import sheet music</b>
+              <span className="muted small">MusicXML (.musicxml, .mxl) or MIDI (.mid) file</span>
+            </button>
+          </div>
+          <input ref={fileRef} type="file" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+          {msg && <div className={`toast ${msg.bad ? 'warn' : 'good'}`}>{msg.text}</div>}
+          <p className="muted small">
+            Tip: most sheet music apps (MuseScore, Flat, Noteflight, or a scanner app that reads a photo of the page) can
+            export MusicXML or MIDI. Your files stay on this device.
+          </p>
+        </section>
+      )}
       {own.length > 0 && (
         <section className="song-group">
           <h3>🎙️ {extraTitle}</h3>

@@ -19,6 +19,7 @@ export function ViolinLessons() {
     return (
       <SongPicker
         songs={VIOLIN_SONGS}
+        instrument="violin"
         onPick={setSong}
         intro={
           <p className="muted">
