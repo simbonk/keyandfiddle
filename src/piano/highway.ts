@@ -12,6 +12,8 @@ export interface HwNote {
   state: 'pending' | 'hit' | 'missed';
   hitLevel: number; // 0..2 relative loudness when hit
   holdFrac: number; // 0..1 how much of the length was held
+  finger?: number; // suggested finger, 1 = thumb
+  handPos?: number;
 }
 
 export interface Burst {
@@ -40,6 +42,7 @@ export interface HighwayView {
   waiting: boolean;
   bursts: Burst[];
   now: number;
+  showFingers?: boolean;
 }
 
 export function drawHighway(v: HighwayView) {
@@ -176,6 +179,22 @@ export function drawHighway(v: HighwayView) {
       ctx.textBaseline = 'bottom';
       const label = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][n.midi % 12];
       ctx.fillText(label + (n.dyn === 'f' ? '!' : n.dyn === 'p' ? '·' : ''), (nl.x + nr.x) / 2, nl.y - 2);
+      if (v.showFingers && n.finger) {
+        // finger number in a little circle, higher up on the block
+        const r = 7 * nl.s + 3;
+        const fx = (nl.x + nr.x) / 2;
+        const fy = nl.y - 2 - (15 * nl.s + 4) - r - 2;
+        if (fy - r > fl2.y) {
+          ctx.fillStyle = 'rgba(16,8,42,0.85)';
+          ctx.beginPath();
+          ctx.arc(fx, fy, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.font = `800 ${Math.round(r * 1.4)}px "Baloo 2", system-ui, sans-serif`;
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(n.finger), fx, fy + 1);
+        }
+      }
     }
   }
 

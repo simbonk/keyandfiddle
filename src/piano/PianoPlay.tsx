@@ -6,7 +6,8 @@ import { playNote } from '../audio/synth';
 import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
-import { Keyboard, keyLayout, type KeyHighlight } from './Keyboard';
+import { Keyboard, keyLayout, type KeyHighlight, type ShadowHand } from './Keyboard';
+import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
 import { PIANO_SONGS, tagHas } from './songs';
@@ -56,7 +57,15 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   const keys = useMemo(() => keyLayout(start, end), [start, end]);
   const [mode, setMode] = useState<Mode>('wait');
   const [speed, setSpeed] = useState(1);
+  const hasLeft = useMemo(() => song.notes.some((n) => tagHas(n.tag, 'L')), [song]);
   const [hands, setHands] = useState<Hands>('both');
+  const [showFingers, setShowFingers] = useState(() => {
+    try {
+      return localStorage.getItem('kf.fingers') !== '0';
+    } catch {
+      return true;
+    }
+  });
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; tone: 'good' | 'warn' | 'info'; id: number } | null>(null);
@@ -107,6 +116,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         hitLevel: 0,
         holdFrac: 0,
       }));
+    assignFingers(st.notes);
     st.songBeat = -3;
     st.bursts = [];
     st.hold = null;
@@ -337,6 +347,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
       waiting,
       bursts: st.bursts,
       now,
+      showFingers,
     });
   });
 
@@ -352,6 +363,20 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   const highlights: Record<number, KeyHighlight> = {};
   if (upcoming[1] && upcoming[1].midi !== cur?.midi) highlights[upcoming[1].midi] = { color: 'rgba(255,255,255,0.35)', label: 'next' };
   if (cur) highlights[cur.midi] = { color: noteColor(cur.midi), label: cur.left ? 'L' : 'R' };
+  // shadow hands: where each hand should sit for its next note(s)
+  const shadows: ShadowHand[] = [];
+  if (showFingers) {
+    for (const left of [false, true]) {
+      const next = st.notes.find((n) => n.state === 'pending' && n.left === left);
+      if (!next || next.handPos === undefined) continue;
+      if (cur && next.beat - cur.beat > 4) continue; // that hand has a long rest
+      const group = st.notes.filter((n) => n.state === 'pending' && n.left === left && Math.abs(n.beat - next.beat) < 0.01);
+      const keys = handKeys(next.handPos, left);
+      for (const n of group) if (n.finger) keys[n.finger - 1] = n.midi;
+      const now = cur && Math.abs(next.beat - cur.beat) < 0.01;
+      shadows.push({ left, keys, active: now ? group.map((n) => n.finger!).filter(Boolean) : [] });
+    }
+  }
 
   const total = st.notes.length;
   const accuracy = total ? st.hits / total : 0;
@@ -383,13 +408,31 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
             </button>
           ))}
         </div>
-        <div className="seg">
-          {(['both', 'right', 'left'] as Hands[]).map((hh) => (
-            <button key={hh} className={hands === hh ? 'on' : ''} onClick={() => setHands(hh)}>
-              {hh === 'both' ? '🙌' : hh === 'right' ? 'R' : 'L'}
-            </button>
-          ))}
-        </div>
+        {hasLeft && (
+          <div className="seg">
+            {(['both', 'right', 'left'] as Hands[]).map((hh) => (
+              <button key={hh} className={hands === hh ? 'on' : ''} onClick={() => setHands(hh)} title={hh === 'both' ? 'Two hands' : hh === 'right' ? 'Right hand only (melody)' : 'Left hand only'}>
+                {hh === 'both' ? '🙌' : hh === 'right' ? '✋' : '🤚'}
+                <span className="lbl">{hh === 'both' ? ' 2 hands' : hh === 'right' ? ' Right' : ' Left'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          className={`btn small ${showFingers ? 'primary' : 'ghost'}`}
+          title="Show which finger to use"
+          onClick={() => {
+            const v = !showFingers;
+            setShowFingers(v);
+            try {
+              localStorage.setItem('kf.fingers', v ? '1' : '0');
+            } catch {
+              /* ignore */
+            }
+          }}
+        >
+          🖐<span className="lbl"> Fingers</span>
+        </button>
         <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
           <option value={0.5}>½×</option>
           <option value={0.75}>¾×</option>
@@ -412,7 +455,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                 {pitchClassName(n.midi)}
               </span>
               <span className="next-meta">
-                {n.left ? 'L' : 'R'} {n.beats >= 2 ? '𝅗𝅥' : n.beats < 1 ? '♪' : '♩'}
+                {n.left ? 'L' : 'R'}{showFingers && n.finger ? ` ${n.finger}` : ''} {n.beats >= 2 ? '𝅗𝅥' : n.beats < 1 ? '♪' : '♩'}
                 {n.dyn === 'f' ? ' 💥' : n.dyn === 'p' ? ' 🌙' : ''}
               </span>
             </div>
@@ -467,6 +510,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         start={start}
         end={end}
         highlights={highlights}
+        shadows={shadows}
         pressed={pressed}
         height="min(34dvh, 240px)"
         onPress={(m) => {

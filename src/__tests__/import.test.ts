@@ -29,3 +29,25 @@ describe('sheet music import', () => {
     expect(m[0].beats).toBe(1);
   });
 });
+
+import { type FingerNote, assignFingers } from '../piano/fingering';
+import { PIANO_SONGS } from '../piano/songs';
+describe('fingering', () => {
+  it('five-finger position for a C-D-E-F-G run, thumb on C', () => {
+    const ns: FingerNote[] = [60, 62, 64, 65, 67].map((m, i) => ({ midi: m, beat: i, left: false }));
+    assignFingers(ns);
+    expect(ns.map((n) => n.finger)).toEqual([1, 2, 3, 4, 5]);
+  });
+  it('left hand counts from the pinky', () => {
+    const ns: FingerNote[] = [48, 50, 52, 53, 55].map((m, i) => ({ midi: m, beat: i, left: true }));
+    assignFingers(ns);
+    expect(ns.map((n) => n.finger)).toEqual([5, 4, 3, 2, 1]);
+  });
+  it('gives every note in every song a finger 1..5', () => {
+    for (const s of PIANO_SONGS) {
+      const ns: FingerNote[] = s.notes.map((n) => ({ midi: n.midi!, beat: n.beat, left: !!n.tag?.includes('L') }));
+      assignFingers(ns);
+      for (const n of ns) expect(n.finger! >= 1 && n.finger! <= 5).toBe(true);
+    }
+  });
+});

@@ -32,6 +32,15 @@ export interface KeyHighlight {
   label?: string;
 }
 
+/** A see-through "shadow" hand: where each finger rests, which ones play now. */
+export interface ShadowHand {
+  left: boolean;
+  /** key under each finger, index 0 = finger 1 (thumb) */
+  keys: number[];
+  /** fingers (1..5) that play the current note(s) */
+  active: number[];
+}
+
 interface Props {
   start: number;
   end: number;
@@ -41,11 +50,12 @@ interface Props {
   onPress?: (midi: number) => void;
   onRelease?: (midi: number) => void;
   height?: number | string;
+  shadows?: ShadowHand[];
 }
 
 const FINGER_COLORS_LEFT = '#5ab0ff';
 
-export function Keyboard({ start, end, highlights, pressed, showLabels = true, onPress, onRelease, height = 180 }: Props) {
+export function Keyboard({ start, end, highlights, pressed, showLabels = true, onPress, onRelease, height = 180, shadows }: Props) {
   const rects = keyLayout(start, end);
   const pointerKeys = useRef(new Map<number, number>());
   const isPressed = (m: number) => (pressed instanceof Set ? pressed.has(m) : pressed === m);
@@ -104,6 +114,23 @@ export function Keyboard({ start, end, highlights, pressed, showLabels = true, o
             );
           }),
       )}
+      {shadows?.map((h) => {
+        const byMidi = new Map(rects.map((r) => [r.midi, r]));
+        return h.keys.map((m, i) => {
+          const r = byMidi.get(m);
+          if (!r) return null;
+          const on = h.active.includes(i + 1);
+          return (
+            <div
+              key={`${h.left ? 'L' : 'R'}${i}`}
+              className={`finger-shadow ${h.left ? 'left' : 'right'} ${on ? 'on' : ''} ${r.black ? 'on-black' : ''}`}
+              style={{ left: `${(r.x + r.w / 2) * 100}%`, ['--fw' as string]: `${r.w * (r.black ? 100 : 78)}%` }}
+            >
+              {i + 1}
+            </div>
+          );
+        });
+      })}
     </div>
   );
 }
