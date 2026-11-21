@@ -290,12 +290,16 @@ function TouchViolinPlay({
               : `translateY(${vp.h - barH}px) rotate(-90deg)`,
         };
 
+  // phones are held sideways in both hands, not tilted like a violin: straight
+  // words, and note tracks that run beside the strings
+  const phone = Math.min(vp.w, vp.h) < 600;
+  const readAngle = phone ? 0 : opts.readAngle;
   // words and popups turn to face you: in the violin's frame, and on the screen
-  const readDeg = opts.neckRight ? opts.readAngle : -opts.readAngle;
+  const readDeg = opts.neckRight ? readAngle : -readAngle;
   // menus and buttons stay straight: upright on the screen (turned when held the other way)
   const straightDeg = rot === "none" ? 0 : -90;
   const screenDeg = rot === "ccw" ? 180 : 0;
-  const angled = opts.readAngle >= 25;
+  const angled = readAngle >= 25;
 
   const bpm = song?.bpm ?? 80;
   const beatMs = 60000 / (bpm * speed);
@@ -418,7 +422,8 @@ function TouchViolinPlay({
       opts.names,
       now,
       opts.neckRight,
-      opts.readAngle,
+      readAngle,
+      phone,
     );
   });
 
@@ -705,6 +710,7 @@ function TouchViolinPlay({
                     role="dialog"
                     aria-label="Violin options"
                   >
+                    {!phone && (
                     <div className="opt-row">
                       <span>
                         Word angle
@@ -736,6 +742,7 @@ function TouchViolinPlay({
                         Reset
                       </button>
                     </div>
+                    )}
                     <div className="opt-row">
                       <span>Sound</span>
                       <VoiceSelect />

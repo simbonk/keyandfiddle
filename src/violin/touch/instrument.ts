@@ -508,17 +508,27 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   // down its string's track onto the landing line; the finger number on it
   // says where to press, and a dotted line leads to that spot.
   const phi = Math.min(0.96, Math.max(0, -readRot));
-  const ux = Math.sin(phi);
-  const uy = d * Math.cos(phi);
+  // phones: the tracks run beside the strings, notes travel toward the bow end
+  // and land just before it
+  let ux = Math.sin(phi);
+  let uy = d * Math.cos(phi);
   // across the tracks, toward the G string's side
-  const vx = Math.cos(phi);
-  const vy = -d * Math.sin(phi);
-  const LANE = 66;
-  const W = 54; // note thickness
-  const r = 21; // badge radius
+  let vx = Math.cos(phi);
+  let vy = -d * Math.sin(phi);
+  const LANE = alongStrings ? Math.min(66, (span - 16) / 4) : 66;
+  const W = Math.round(LANE * 0.82); // note thickness
+  const r = Math.round(LANE * 0.32); // badge radius
   const off = (s: number) => (1.5 - s) * LANE;
-  const cy = strike + d * Math.max(1.5 * LANE * Math.abs(vy) + 34, span * 0.22);
-  const cx = L.x0 + 1.5 * LANE * vx + Math.min(190, (right - L.x0) * 0.2);
+  let cy = strike + d * Math.max(1.5 * LANE * Math.abs(vy) + 34, span * 0.22);
+  let cx = L.x0 + 1.5 * LANE * vx + Math.min(190, (right - L.x0) * 0.2);
+  if (alongStrings) {
+    ux = -1;
+    uy = 0;
+    vx = 0;
+    vy = -d;
+    cy = strike + d * (span / 2);
+    cx = right - 40;
+  }
   const start = (s: number): [number, number] => [cx + vx * off(s), cy + vy * off(s)];
   const at = (s: number, t: number, across = 0): [number, number] => {
     const [px, py] = start(s);
@@ -530,7 +540,8 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   for (let s = 0; s < 4; s++) {
     const [px, py] = start(s);
     if (ux > 0.01) trackLen = Math.min(trackLen, (right - W / 2 - px) / ux);
-    trackLen = Math.min(trackLen, (edgeY - py) / uy);
+    if (ux < -0.01) trackLen = Math.min(trackLen, (px - L.x0) / -ux);
+    if (Math.abs(uy) > 0.01) trackLen = Math.min(trackLen, (edgeY - py) / uy);
   }
   trackLen = Math.max(120, trackLen);
   const ppb = trackLen / f.visibleBeats;
@@ -695,7 +706,9 @@ export function drawTouchViolin(
   now: number,
   mirror = false,
   readAngle = 0,
+  tracksAlongStrings = false,
 ) {
+  alongStrings = tracksAlongStrings;
   // text turns toward the scroll, to face a player looking down the neck
   readRot = (-readAngle * Math.PI) / 180;
   if (!mirror && !readRot) return drawViolinSurface(ctx, st, t, showNames, now);
@@ -728,6 +741,8 @@ export function drawTouchViolin(
 
 /** Rotation (radians, drawing coordinates) that text is drawn at; see drawTouchViolin. */
 let readRot = 0;
+/** note tracks run beside the strings (phones) instead of slanting across */
+let alongStrings = false;
 
 /** Run `draw` in a frame turned to the reading angle around (x, y); text inside is not turned again. */
 function turned(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => void) {
