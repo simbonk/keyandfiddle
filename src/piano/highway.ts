@@ -137,10 +137,17 @@ export function drawHighway(v: HighwayView) {
     ctx.closePath();
     ctx.fill();
     if (n.dyn === 'f' || isCur) {
-      ctx.shadowColor = isCur ? '#fff' : color;
-      ctx.shadowBlur = isCur ? 24 : 16;
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      // cheap glow: a soft wide outline (canvas shadowBlur is very slow in iPad Safari)
+      const a0 = ctx.globalAlpha;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = isCur ? '#fff' : color;
+      ctx.globalAlpha = a0 * 0.25;
+      ctx.lineWidth = isCur ? 14 : 10;
+      ctx.stroke();
+      ctx.globalAlpha = a0 * 0.5;
+      ctx.lineWidth = isCur ? 6 : 4;
+      ctx.stroke();
+      ctx.globalAlpha = a0;
     }
     // left hand notes get a striped look
     if (n.left) {

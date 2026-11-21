@@ -38,7 +38,7 @@ export function fingeringFor(midi: number): Fingering | null {
         3: [2, 'low 2'],
         4: [2, 'high 2'],
         5: [3, '3'],
-        6: [4, 'low 4'],
+        6: [3, 'high 3'],
         7: [4, '4'],
       };
       const [finger, name] = map[semis];
@@ -188,6 +188,38 @@ export const VIOLIN_SONGS: Song[] = [
     blurb: 'On the D and A strings.',
     notes: parseSong(`F#4:1 F#4:1 G4:1 A4:1 | A4:1 G4:1 F#4:1 E4:1 | D4:1 D4:1 E4:1 F#4:1 | F#4:1.5 E4:0.5 E4:2 |
       F#4:1 F#4:1 G4:1 A4:1 | A4:1 G4:1 F#4:1 E4:1 | D4:1 D4:1 E4:1 F#4:1 | E4:1.5 D4:0.5 D4:2`),
+  },
+  {
+    id: 'canon-v',
+    title: 'Canon in D',
+    emoji: '💒',
+    bpm: 66,
+    level: 2,
+    blurb: 'Pachelbel. Long, slow, whole bows on the A and E strings.',
+    notes: parseSong(`F#5:2 E5:2 D5:2 C#5:2 | B4:2 A4:2 B4:2 C#5:2 | D5:2 C#5:2 B4:2 A4:2 | G4:2 F#4:2 G4:2 E4:2 | D4:4`),
+  },
+  {
+    id: 'minuet-v',
+    title: 'Minuet in G',
+    emoji: '👑',
+    bpm: 92,
+    level: 3,
+    blurb: 'Bach. Quick string crossings and a low 2 for C.',
+    notes: parseSong(`
+      D5:1 G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1 G4:1 G4:1 | E5:1 C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1 G4:1 G4:1 |
+      C5:1 D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1 C5:0.5 B4:0.5 A4:0.5 G4:0.5 | F#4:1 G4:0.5 A4:0.5 B4:0.5 G4:0.5 | A4:3 |
+      D5:1 G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1 G4:1 G4:1 | E5:1 C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1 G4:1 G4:1 |
+      C5:1 D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1 C5:0.5 B4:0.5 A4:0.5 G4:0.5 | A4:1 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 | G4:3`),
+  },
+  {
+    id: 'greensleeves-v',
+    title: 'Greensleeves',
+    emoji: '🍃',
+    bpm: 88,
+    level: 3,
+    blurb: 'Minor key: low 1 for F on the E string, high 3 for G#.',
+    notes: parseSong(`A4:1 | C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:2 A4:1 | A4:1.5 G#4:0.5 A4:1 | B4:2 G#4:1 | E4:2 A4:1 |
+      C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:1.5 B4:0.5 A4:1 | G#4:1.5 F#4:0.5 G#4:1 | A4:3`),
   },
 ];
 

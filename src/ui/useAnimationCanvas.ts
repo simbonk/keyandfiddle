@@ -25,8 +25,11 @@ export function useAnimationCanvas(
     let ch = 0;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const rect = canvas.getBoundingClientRect();
+      // keep the backing store under ~2.5M pixels so big iPads stay smooth
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const area = rect.width * rect.height;
+      if (area > 0) dpr = Math.max(1, Math.min(dpr, Math.sqrt(2_500_000 / area)));
       if (rect.width !== cw || rect.height !== ch) {
         cw = rect.width;
         ch = rect.height;

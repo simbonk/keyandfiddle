@@ -1,3 +1,4 @@
+import { TopBarSlot } from '../ui/chrome';
 import { useState } from 'react';
 import type { Song } from '../audio/notes';
 import { type PianoCalibration, isCalibrated, loadCalibration, saveCalibration } from './calibration';
@@ -16,6 +17,7 @@ export function PianoTab() {
 
   return (
     <div className="tab-body">
+      <TopBarSlot>
       <nav className="subnav">
         <button className={view === 'play' ? 'on' : ''} onClick={() => setView('play')}>
           🎮 Play songs
@@ -27,6 +29,7 @@ export function PianoTab() {
           🎛️ Tune to my piano
         </button>
       </nav>
+      </TopBarSlot>
 
       {view === 'tune' && (
         <>

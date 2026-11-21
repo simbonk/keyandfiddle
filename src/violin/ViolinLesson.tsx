@@ -3,6 +3,8 @@ import { usePitchListener } from '../audio/hooks';
 import { mic } from '../audio/mic';
 import { centsBetween, midiName, midiToFreq, songLengthBeats, type Song } from '../audio/notes';
 import { playNote } from '../audio/synth';
+import { FullscreenButton, usePlayingMode } from '../ui/chrome';
+import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
 import { CameraStage } from './CameraStage';
 import { BowMap, FingerboardMap } from './FingerboardMap';
@@ -15,23 +17,16 @@ export function ViolinLessons() {
   const [song, setSong] = useState<Song | null>(null);
   if (!song) {
     return (
-      <div className="panel">
-        <h2>Pick a tune</h2>
-        <p className="muted">
-          Two tracks come at you: the <b>left track</b> shows which string and which finger, the <b>right track</b> shows
-          which part of the bow to use and which way to move it.
-        </p>
-        <div className="song-grid">
-          {VIOLIN_SONGS.map((s) => (
-            <button key={s.id} className="song-card" onClick={() => setSong(s)}>
-              <span className="song-emoji">{s.emoji}</span>
-              <b>{s.title}</b>
-              <span className="stars">{'★'.repeat(s.level)}{'☆'.repeat(3 - s.level)}</span>
-              {s.blurb && <span className="muted small">{s.blurb}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SongPicker
+        songs={VIOLIN_SONGS}
+        onPick={setSong}
+        intro={
+          <p className="muted">
+            Two tracks come at you: the <b>left track</b> shows which string and which finger, the <b>right track</b>{' '}
+            shows which part of the bow to use and which way to move it.
+          </p>
+        }
+      />
     );
   }
   return <Lesson key={song.id} song={song} onExit={() => setSong(null)} />;
@@ -40,6 +35,7 @@ export function ViolinLessons() {
 type Mode = 'wait' | 'demo';
 
 function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
+  usePlayingMode(true);
   const analyzer = useMemo(() => new ViolinAnalyzer(), []);
   const [mode, setMode] = useState<Mode>('wait');
   const [running, setRunning] = useState(false);
@@ -253,30 +249,31 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
     <div className="lesson">
       <div className="game-bar">
         <button className="btn small ghost" onClick={onExit}>
-          ◀ Tunes
+          ◀<span className="lbl"> Tunes</span>
         </button>
         <div className="game-title">
           {song.emoji} {song.title}
         </div>
         <div className="seg">
           <button className={mode === 'wait' ? 'on' : ''} onClick={() => { setMode('wait'); setRunning(false); reset(); }}>
-            🐢 Wait for me
+            🐢<span className="lbl"> Wait for me</span>
           </button>
           <button className={mode === 'demo' ? 'on' : ''} onClick={() => { setMode('demo'); setRunning(false); reset(); }}>
-            👂 Listen
+            👂<span className="lbl"> Listen</span>
           </button>
         </div>
         <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
-          <option value={0.5}>½ speed</option>
-          <option value={0.75}>¾ speed</option>
-          <option value={1}>full speed</option>
+          <option value={0.5}>½×</option>
+          <option value={0.75}>¾×</option>
+          <option value={1}>1×</option>
         </select>
         <button className={`btn small ${camera ? 'primary' : ''}`} onClick={() => setCamera((c) => !c)}>
-          🪞 Mirror {camera ? 'on' : 'off'}
+          🪞<span className="lbl"> Mirror {camera ? 'on' : 'off'}</span>
         </button>
         <div className="score">
           🎯 {st.hits}/{total}
         </div>
+        <FullscreenButton />
       </div>
 
       <div className={`lesson-body ${camera ? 'with-cam' : ''}`}>

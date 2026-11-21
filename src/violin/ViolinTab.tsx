@@ -1,3 +1,4 @@
+import { TopBarSlot } from '../ui/chrome';
 import { useState } from 'react';
 import { ViolinCoach } from './ViolinCoach';
 import { ViolinLessons } from './ViolinLesson';
@@ -9,6 +10,7 @@ export function ViolinTab() {
   const [view, setView] = useState<View>('tune');
   return (
     <div className="tab-body">
+      <TopBarSlot>
       <nav className="subnav">
         <button className={view === 'tune' ? 'on' : ''} onClick={() => setView('tune')}>
           🎚️ 1. Tune
@@ -20,6 +22,7 @@ export function ViolinTab() {
           🎮 3. Play tunes
         </button>
       </nav>
+      </TopBarSlot>
       {view === 'tune' && <ViolinTuner onDone={() => setView('mirror')} />}
       {view === 'mirror' && <ViolinCoach />}
       {view === 'lessons' && <ViolinLessons />}

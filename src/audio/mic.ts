@@ -18,7 +18,7 @@ export interface PitchFrame {
 
 type Listener = (f: PitchFrame) => void;
 
-class MicEngine {
+export class MicEngine {
   ctx: AudioContext | null = null;
   stream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
@@ -26,10 +26,10 @@ class MicEngine {
   private detector: PitchDetector | null = null;
   private listeners = new Set<Listener>();
   private raf = 0;
-  private lastAnalysis = 0;
   private slowLevel = 0;
   private fastPrev = 0;
   private lastOnset = 0;
+  private noiseFloor = 0.002;
   private starting: Promise<void> | null = null;
   status: 'idle' | 'starting' | 'running' | 'denied' | 'error' = 'idle';
   error = '';
@@ -92,6 +92,44 @@ class MicEngine {
     return this.starting;
   }
 
+  /**
+   * Attack detection that also works for a key struck again while it is still
+   * ringing. Compares the newest half of the buffer (~21 ms, longer than the
+   * 20 ms analysis tick so no attack slips between ticks) with the half before,
+   * both in overall energy and in "brightness" (first-difference energy):
+   * a hammer or bow change adds a burst of high frequencies even when the
+   * overall level barely moves.
+   */
+  private detectOnset(now: number, rms: number): boolean {
+    const b = this.buf;
+    const n = b.length;
+    const blk = n >> 1;
+    const seg = (end: number) => {
+      let e = 0;
+      let hf = 0;
+      for (let i = end - blk + 1; i < end; i++) {
+        e += b[i] * b[i];
+        const d = b[i] - b[i - 1];
+        hf += d * d;
+      }
+      return { e: e / blk, hf: hf / blk };
+    };
+    const newest = seg(n);
+    const before = seg(n - blk);
+    // track the quiet-room level so thresholds adapt to the mic
+    this.noiseFloor = Math.min(Math.max(this.noiseFloor * 1.0015, 0.0015), Math.max(rms, 0.0015));
+    const floorE = Math.max(1.2e-4, (this.noiseFloor * 4) ** 2);
+    const energyJump = newest.e > before.e * 1.7 && newest.e > floorE;
+    const brightJump = newest.hf > before.hf * 2.4 && newest.e > floorE * 0.6;
+    const rising = rms > this.fastPrev * 1.5 && rms > 0.01;
+    this.fastPrev = rms * 0.6 + this.fastPrev * 0.4;
+    if ((energyJump || brightJump || rising) && now - this.lastOnset > 90) {
+      this.lastOnset = now;
+      return true;
+    }
+    return false;
+  }
+
   subscribe(l: Listener) {
     this.listeners.add(l);
     return () => {
@@ -100,25 +138,19 @@ class MicEngine {
   }
 
   private loop = () => {
-    this.raf = requestAnimationFrame(this.loop);
+    // A timer rather than requestAnimationFrame: rAF gets throttled or skipped
+    // while the page is busy drawing, which made notes register late on iPads.
+    if (!this.raf) this.raf = window.setInterval(this.tick, 20);
+  };
+
+  private tick = () => {
     const now = performance.now();
-    // ~45 analyses per second keeps the CPU cool on iPads.
-    if (now - this.lastAnalysis < 22) return;
-    this.lastAnalysis = now;
     if (!this.analyser || !this.detector) return;
     this.analyser.getFloatTimeDomainData(this.buf);
     const r = this.detector.detect(this.buf);
     const rms = r.rms;
     this.slowLevel = this.slowLevel * 0.9 + rms * 0.1;
-    // Onset: fast rise relative to the recent floor.
-    const rising = rms > this.fastPrev * 1.6 && rms > 0.012;
-    const jump = rms > this.slowLevel * 2.2 && rms > 0.015;
-    let onset = false;
-    if ((rising || jump) && now - this.lastOnset > 110) {
-      onset = true;
-      this.lastOnset = now;
-    }
-    this.fastPrev = rms * 0.6 + this.fastPrev * 0.4;
+    const onset = this.detectOnset(now, rms);
     const hasPitch = r.freq > 0 && r.clarity >= this.clarityGate;
     const frame: PitchFrame = {
       t: now,
@@ -133,7 +165,8 @@ class MicEngine {
   };
 
   stop() {
-    cancelAnimationFrame(this.raf);
+    clearInterval(this.raf);
+    this.raf = 0;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     this.analyser = null;

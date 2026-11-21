@@ -89,3 +89,23 @@ export function matchKey(
   if (!best || Math.abs(best.cents) > 60) return null;
   return best;
 }
+
+/**
+ * Is this frequency the given key (or the same key an octave off, a common
+ * pitch-detector slip on low piano notes)? Checked against both this piano's
+ * calibrated pitch and standard tuning, so one badly measured key can't
+ * make that key impossible to play.
+ */
+export function nearKey(c: PianoCalibration, freq: number, midi: number): boolean {
+  // calibrated pitch: generous; standard pitch: tighter, so a flat neighbour can't sneak in
+  const refs: [number, number][] = [
+    [expectedFreq(c, midi), 50],
+    [midiToFreq(midi), 30],
+  ];
+  for (const [ref, tol] of refs) {
+    for (const oct of [0, -1, 1]) {
+      if (Math.abs(centsBetween(freq, ref * Math.pow(2, oct))) < tol) return true;
+    }
+  }
+  return false;
+}

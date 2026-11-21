@@ -154,10 +154,17 @@ export function drawViolinHighway(v: VHighwayView) {
     ctx.closePath();
     ctx.fill();
     if (isCur) {
-      ctx.shadowColor = '#fff';
-      ctx.shadowBlur = 22;
-      ctx.fill();
-      ctx.shadowBlur = 0;
+      // cheap glow (canvas shadowBlur is very slow in iPad Safari)
+      const a0 = ctx.globalAlpha;
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#fff';
+      ctx.globalAlpha = a0 * 0.25;
+      ctx.lineWidth = 14;
+      ctx.stroke();
+      ctx.globalAlpha = a0 * 0.55;
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.globalAlpha = a0;
     }
     // finger number badge at the near end
     const r = 15 * a.s + 4;
