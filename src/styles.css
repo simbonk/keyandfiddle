@@ -1378,12 +1378,30 @@ select option {
 }
 
 /* photo sheet-music import */
+.pi-scroller {
+  overflow: auto;
+  max-height: 78vh;
+  border-radius: 12px;
+  margin: 10px 0;
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
 .pi-sheet {
   position: relative;
   background: #fff;
-  border-radius: 12px;
   overflow: hidden;
-  margin: 10px 0;
+  min-width: 100%;
+}
+.pi-tools {
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.pi-zoom-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .pi-sheet img {
   display: block;
