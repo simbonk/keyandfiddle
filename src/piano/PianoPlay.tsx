@@ -11,7 +11,7 @@ import { Keyboard, keyLayout, type KeyHighlight, type ShadowHand } from './Keybo
 import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
-import { SoundSelect } from './SoundLab';
+import { SoundLab, SoundSelect } from './SoundLab';
 import { MicBoostSelect } from '../ui/MicButton';
 import { PIANO_SONGS, tagHas } from './songs';
 
@@ -22,6 +22,7 @@ interface Props {
   cal: PianoCalibration;
   extraSongs?: Song[];
   initialSong?: Song | null;
+  onRecord?: () => void;
 }
 
 interface Hold {
@@ -33,7 +34,7 @@ interface Hold {
   reported: boolean;
 }
 
-export function PianoPlay({ cal, extraSongs = [], initialSong = null }: Props) {
+export function PianoPlay({ cal, extraSongs = [], initialSong = null, onRecord }: Props) {
   const [song, setSong] = useState<Song | null>(initialSong);
   const songs = [...PIANO_SONGS, ...extraSongs];
   useEffect(() => {
@@ -45,6 +46,13 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null }: Props) {
         songs={songs}
         instrument="piano"
         onPick={setSong}
+        onAddRecording={onRecord}
+        afterSheetMusic={
+          <section className="song-group">
+            <h3>🎹 Piano sounds</h3>
+            <SoundLab keys={false} />
+          </section>
+        }
         badge={(s) => {
           const [a, b] = songRange(s, cal.startMidi);
           return b - a > 24 ? `🎹 ${Math.round((b - a) / 12)} octaves` : null;

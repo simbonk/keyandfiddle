@@ -16,6 +16,8 @@ export function SongPicker({
   extraTitle = 'Your recordings',
   badge,
   instrument,
+  afterSheetMusic,
+  onAddRecording,
 }: {
   songs: Song[];
   onPick: (s: Song) => void;
@@ -24,6 +26,10 @@ export function SongPicker({
   badge?: (s: Song) => string | null;
   /** Show "import sheet music" and the user's imported songs for this instrument. */
   instrument?: 'piano' | 'violin';
+  /** Extra section shown under "Your sheet music" (piano sounds). */
+  afterSheetMusic?: React.ReactNode;
+  /** Shows an "add a recording" card in the recordings section. */
+  onAddRecording?: () => void;
 }) {
   const scores = useImportedScores();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -128,10 +134,20 @@ export function SongPicker({
           </p>
         </section>
       )}
-      {own.length > 0 && (
+      {afterSheetMusic}
+      {(own.length > 0 || onAddRecording) && (
         <section className="song-group">
           <h3>🎙️ {extraTitle}</h3>
-          <div className="song-grid">{own.map(card)}</div>
+          <div className="song-grid">
+            {own.map(card)}
+            {onAddRecording && (
+              <button className="song-card import-card" onClick={onAddRecording}>
+                <span className="song-emoji">➕</span>
+                <b>Record a song</b>
+                <span className="muted small">Play on your piano and I'll write it down so you can play it back or learn it</span>
+              </button>
+            )}
+          </div>
         </section>
       )}
     </div>

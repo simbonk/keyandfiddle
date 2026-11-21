@@ -5,12 +5,13 @@ import { type PianoCalibration, isCalibrated, loadCalibration, saveCalibration }
 import { PianoPlay } from './PianoPlay';
 import { type Recording, Recorder, loadRecs, recordingToSong } from './Recorder';
 import { TuneChart, TuningWizard } from './TuningWizard';
+import { MicBoostSelect } from '../ui/MicButton';
 
-type View = 'play' | 'record' | 'tune';
+type View = 'play' | 'record' | 'settings';
 
 export function PianoTab() {
   const [cal, setCal] = useState<PianoCalibration>(loadCalibration);
-  const [view, setView] = useState<View>(() => (isCalibrated(loadCalibration()) ? 'play' : 'tune'));
+  const [view, setView] = useState<View>(() => (isCalibrated(loadCalibration()) ? 'play' : 'settings'));
   const [skipped, setSkipped] = useState(false);
   const [learnSong, setLearnSong] = useState<Song | null>(null);
   const [recs, setRecs] = useState<Recording[]>(loadRecs);
@@ -18,21 +19,23 @@ export function PianoTab() {
   return (
     <div className="tab-body">
       <TopBarSlot>
-      <nav className="subnav">
-        <button className={view === 'play' ? 'on' : ''} onClick={() => setView('play')}>
-          🎮 Play songs
-        </button>
-        <button className={view === 'record' ? 'on' : ''} onClick={() => setView('record')}>
-          🎙️ Record
-        </button>
-        <button className={view === 'tune' ? 'on' : ''} onClick={() => setView('tune')}>
-          🎛️ Tune to my piano
-        </button>
-      </nav>
+        <nav className="subnav">
+          {view !== 'play' && <button onClick={() => setView('play')}>◀ Songs</button>}
+          <button
+            className={view === 'settings' ? 'on' : ''}
+            onClick={() => setView(view === 'settings' ? 'play' : 'settings')}
+          >
+            ⚙️ Settings
+          </button>
+        </nav>
       </TopBarSlot>
 
-      {view === 'tune' && (
+      {view === 'settings' && (
         <>
+          <div className="panel slim settings-row">
+            <b>⚙️ Settings</b>
+            <MicBoostSelect />
+          </div>
           {isCalibrated(cal) && (
             <div className="panel slim">
               <b>Your piano right now</b>
@@ -62,11 +65,19 @@ export function PianoTab() {
         <>
           {!isCalibrated(cal) && (
             <div className="hint">
-              Tip: <button className="link" onClick={() => setView('tune')}>tune in to your piano</button> first so I can
-              hear it properly. You can also tap the keys on screen.
+              Tip:{' '}
+              <button className="link" onClick={() => setView('settings')}>
+                tune in to your piano
+              </button>{' '}
+              (in ⚙️ Settings) first so I can hear it properly. You can also tap the keys on screen.
             </div>
           )}
-          <PianoPlay cal={cal} extraSongs={recs.map(recordingToSong)} initialSong={learnSong} />
+          <PianoPlay
+            cal={cal}
+            extraSongs={recs.map(recordingToSong)}
+            initialSong={learnSong}
+            onRecord={() => setView('record')}
+          />
         </>
       )}
       {view === 'record' && (

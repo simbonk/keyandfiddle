@@ -2,10 +2,9 @@ import { useMemo, useState } from 'react';
 import { PianoTab } from './piano/PianoTab';
 import { ChromeContext, FullscreenButton } from './ui/chrome';
 import { ViolinTab } from './violin/ViolinTab';
-import { SoundLab } from './piano/SoundLab';
 
-type Tab = 'piano' | 'violin' | 'keyboard';
-const TABS: Tab[] = ['piano', 'violin', 'keyboard'];
+type Tab = 'piano' | 'violin';
+const TABS: Tab[] = ['piano', 'violin'];
 
 export function App() {
   const [tab, setTab] = useState<Tab>(() => {
@@ -39,30 +38,27 @@ export function App() {
             <span className="brand-fiddle">Fiddle</span>
           </div>
           <nav className="tabs" role="tablist">
-            <button role="tab" aria-selected={tab === 'piano'} className={tab === 'piano' ? 'on' : ''} onClick={() => pick('piano')}>
+            <button
+              role="tab"
+              aria-selected={tab === 'piano'}
+              className={tab === 'piano' ? 'on' : ''}
+              onClick={() => pick('piano')}
+            >
               🎹<span className="lbl"> Piano</span>
             </button>
-            <button role="tab" aria-selected={tab === 'violin'} className={tab === 'violin' ? 'on' : ''} onClick={() => pick('violin')}>
+            <button
+              role="tab"
+              aria-selected={tab === 'violin'}
+              className={tab === 'violin' ? 'on' : ''}
+              onClick={() => pick('violin')}
+            >
               🎻<span className="lbl"> Violin</span>
-            </button>
-            <button role="tab" aria-selected={tab === 'keyboard'} className={tab === 'keyboard' ? 'on' : ''} onClick={() => pick('keyboard')}>
-              🎛️<span className="lbl"> Keyboard</span>
             </button>
           </nav>
           <div className="subnav-slot" ref={setSlot} />
           <FullscreenButton className="btn small ghost fs-top" />
         </header>
-        <main className="main">
-          {tab === 'piano' ? (
-            <PianoTab />
-          ) : tab === 'violin' ? (
-            <ViolinTab />
-          ) : (
-            <div className="tab-body">
-              <SoundLab />
-            </div>
-          )}
-        </main>
+        <main className="main">{tab === 'piano' ? <PianoTab /> : <ViolinTab />}</main>
       </div>
     </ChromeContext.Provider>
   );

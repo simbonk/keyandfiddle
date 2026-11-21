@@ -1571,3 +1571,15 @@ select option {
   margin-left: 10px;
   white-space: nowrap;
 }
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* iPad held sideways: nudge the top menu down, clear of the status bar / window controls */
+@media (orientation: landscape) and (pointer: coarse) and (min-width: 900px) {
+  .topbar {
+    padding-top: 14px;
+  }
+}

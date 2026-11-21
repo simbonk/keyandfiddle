@@ -42,7 +42,7 @@ function preview(id: SoundId) {
 type RecState = 'idle' | 'listening' | 'hearing' | 'quiet' | 'denied' | 'error';
 
 /** The Keyboard tab: pick a sound, make your own from the mic, and play freely. */
-export function SoundLab() {
+export function SoundLab({ keys = true }: { keys?: boolean }) {
   const sound = useKeyboardSound();
   const mine = useMySounds();
   const [octave, setOctave] = useState(48);
@@ -99,7 +99,7 @@ export function SoundLab() {
   return (
     <div className="sound-lab">
       <div className="panel slim">
-        <b>Pick a keyboard sound</b>
+        <b>Pick how your keys sound</b>
         <div className="sound-grid">
           {SOUNDS.map((s) => (
             <button key={s.id} className={`sound-card ${sound === s.id ? 'on' : ''}`} onClick={() => pick(s.id)}>
@@ -192,37 +192,39 @@ export function SoundLab() {
         {mine.length > 0 && <p className="muted small tip">Tip: tap the picture on your chosen sound to change it.</p>}
       </div>
 
-      <div className="freeplay">
-        <div className="row octave-row">
-          <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
-            ◀ Lower
-          </button>
-          <span className="muted small">Play anything!</span>
-          <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
-            Higher ▶
-          </button>
+      {keys && (
+        <div className="freeplay">
+          <div className="row octave-row">
+            <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
+              ◀ Lower
+            </button>
+            <span className="muted small">Play anything!</span>
+            <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
+              Higher ▶
+            </button>
+          </div>
+          <Keyboard
+            start={octave}
+            end={octave + 24}
+            pressed={down}
+            height="min(34dvh, 240px)"
+            onPress={(m) => {
+              voices.current.get(m)?.kill();
+              voices.current.set(m, noteOn(m, 0.75));
+              setDown((s) => new Set(s).add(m));
+            }}
+            onRelease={(m) => {
+              voices.current.get(m)?.release();
+              voices.current.delete(m);
+              setDown((s) => {
+                const n = new Set(s);
+                n.delete(m);
+                return n;
+              });
+            }}
+          />
         </div>
-        <Keyboard
-          start={octave}
-          end={octave + 24}
-          pressed={down}
-          height="min(34dvh, 240px)"
-          onPress={(m) => {
-            voices.current.get(m)?.kill();
-            voices.current.set(m, noteOn(m, 0.75));
-            setDown((s) => new Set(s).add(m));
-          }}
-          onRelease={(m) => {
-            voices.current.get(m)?.release();
-            voices.current.delete(m);
-            setDown((s) => {
-              const n = new Set(s);
-              n.delete(m);
-              return n;
-            });
-          }}
-        />
-      </div>
+      )}
     </div>
   );
 }
