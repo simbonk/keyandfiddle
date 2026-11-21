@@ -4,10 +4,9 @@ import type { Song } from '../audio/notes';
 import { type PianoCalibration, isCalibrated, loadCalibration, saveCalibration } from './calibration';
 import { PianoPlay } from './PianoPlay';
 import { type Recording, Recorder, loadRecs, recordingToSong } from './Recorder';
-import { SoundLab } from './SoundLab';
 import { TuneChart, TuningWizard } from './TuningWizard';
 
-type View = 'play' | 'sounds' | 'record' | 'tune';
+type View = 'play' | 'record' | 'tune';
 
 export function PianoTab() {
   const [cal, setCal] = useState<PianoCalibration>(loadCalibration);
@@ -22,9 +21,6 @@ export function PianoTab() {
       <nav className="subnav">
         <button className={view === 'play' ? 'on' : ''} onClick={() => setView('play')}>
           🎮 Play songs
-        </button>
-        <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
-          🎹 Sounds
         </button>
         <button className={view === 'record' ? 'on' : ''} onClick={() => setView('record')}>
           🎙️ Record
@@ -73,7 +69,6 @@ export function PianoTab() {
           <PianoPlay cal={cal} extraSongs={recs.map(recordingToSong)} initialSong={learnSong} />
         </>
       )}
-      {view === 'sounds' && <SoundLab />}
       {view === 'record' && (
         <Recorder
           cal={cal}

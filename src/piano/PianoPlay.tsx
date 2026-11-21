@@ -11,7 +11,7 @@ import { Keyboard, keyLayout, type KeyHighlight, type ShadowHand } from './Keybo
 import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
-import { SoundSelect } from './SoundLab';
+import { SoundLab, SoundSelect } from './SoundLab';
 import { PIANO_SONGS, tagHas } from './songs';
 
 type Mode = 'wait' | 'play' | 'demo';
@@ -43,6 +43,7 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null }: Props) {
       <SongPicker
         songs={songs}
         instrument="piano"
+        intro={<SoundLab />}
         onPick={setSong}
         badge={(s) => {
           const [a, b] = songRange(s, cal.startMidi);
@@ -521,7 +522,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         pressed={pressed}
         height="min(34dvh, 240px)"
         onPress={(m) => {
-          voices.current.get(m)?.release();
+          voices.current.get(m)?.kill();
           voices.current.set(m, noteOn(m, 0.7));
           setTouchDown((s) => new Set(s).add(m));
           if (running && mode !== 'demo') {

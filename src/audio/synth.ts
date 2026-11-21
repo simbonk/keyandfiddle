@@ -26,7 +26,7 @@ export function playNote(
   if ((timbre === 'piano' || timbre === 'keys') && !isFreq) {
     const v = noteOn(midiOrFreq, velocity, t0, timbre === 'piano' ? 'grand' : undefined);
     v.release(t0 + duration);
-    return () => v.release();
+    return () => v.kill();
   }
   if (timbre === 'piano' || timbre === 'keys') timbre = 'synthPiano';
   const f = isFreq ? midiOrFreq : midiToFreq(midiOrFreq);

@@ -13,12 +13,16 @@ export interface MySound {
   /** True when we heard a clear note (singing, humming, whistling). */
   pitched: boolean;
   rate: number;
+  /** The whole recording, so a trim can always be undone. */
   data: Float32Array;
+  /** Part that plays, in samples (defaults to all of it). */
+  trimStart?: number;
+  trimEnd?: number;
   created: number;
 }
 
 export const MAX_MY_SOUNDS = 6;
-export const MAX_SAMPLE_SEC = 2;
+export const MAX_SAMPLE_SEC = 3;
 export const SOUND_EMOJIS = ['🤧', '😮‍💨', '👏', '🎤', '🐶', '🐱', '🦆', '🐸', '🐷', '🦁', '🤖', '👻', '💥', '🥁', '😂', '🍕'];
 
 // ---------- storage (IndexedDB: localStorage is too small for audio) ----------
@@ -82,6 +86,7 @@ export function loadMySounds(): Promise<MySound[]> {
 }
 export async function saveMySound(s: MySound) {
   await tx('readwrite', (st) => st.put(s));
+  bufCache.delete(s.id);
   sounds = [...sounds.filter((x) => x.id !== s.id), s].sort((a, b) => a.created - b.created);
   emit();
 }
@@ -103,11 +108,25 @@ export function mySoundBuffer(id: string): { buf: AudioBuffer; root: number } | 
   let b = bufCache.get(id);
   if (!b) {
     const ctx = getAudioContext();
-    b = ctx.createBuffer(1, s.data.length, s.rate);
-    b.getChannelData(0).set(s.data);
+    const part = trimmed(s);
+    b = ctx.createBuffer(1, part.length, s.rate);
+    b.getChannelData(0).set(part);
     bufCache.set(id, b);
   }
   return { buf: b, root: s.root };
+}
+
+/** The part of a sound that plays, with tiny fades so trimmed edges don't click. */
+export function trimmed(s: MySound): Float32Array {
+  const a = Math.max(0, Math.min(s.data.length - 1, s.trimStart ?? 0));
+  const b = Math.max(a + 1, Math.min(s.data.length, s.trimEnd ?? s.data.length));
+  const y = s.data.slice(a, b);
+  const f = Math.min(Math.round(s.rate * 0.005), y.length >> 2);
+  for (let i = 0; i < f; i++) {
+    y[i] *= i / f;
+    y[y.length - 1 - i] *= i / f;
+  }
+  return y;
 }
 
 // ---------- recording ----------
@@ -182,19 +201,22 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
           // keep a short pre-roll only, so the start of the sound isn't clipped
           chunks.push(c);
           total += c.length;
-          while (chunks.length > 4) total -= chunks.shift()!.length;
-          if (rms > Math.max(0.03, noise * 4)) startedAt = total - c.length;
+          while (chunks.length > 8) total -= chunks.shift()!.length;
+          if (rms > Math.max(0.02, noise * 3)) startedAt = total - c.length;
           else noise = noise * 0.9 + rms * 0.1;
         } else {
           chunks.push(c);
           total += c.length;
-          quietFor = rms < Math.max(0.012, noise * 2) ? quietFor + c.length : 0;
-          if (quietFor > sr * 0.35 || total - startedAt > sr * MAX_SAMPLE_SEC) finish(true);
+          // Only stop by itself after a real pause, so a whole word or phrase
+          // ("hello!") is kept, not just its first syllable.
+          quietFor = rms < Math.max(0.008, noise * 1.5) ? quietFor + c.length : 0;
+          const soFar = total - startedAt;
+          if ((quietFor > sr * 0.8 && soFar > sr * 0.8) || soFar > sr * MAX_SAMPLE_SEC) finish(true);
         }
         onLevel(Math.min(1, rms * 5), startedAt >= 0);
       };
       // give up if nothing is heard for a while
-      setTimeout(() => finish(true), 8000);
+      setTimeout(() => finish(true), 10000);
     });
 
     proc.onaudioprocess = null;
@@ -227,11 +249,11 @@ export function shapeSample(x: Float32Array, sr: number): Float32Array | null {
   for (let i = 0; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
   if (peak < 0.02) return null;
   let a = 0;
-  while (a < x.length && Math.abs(x[a]) < peak * 0.08) a++;
-  a = Math.max(0, a - Math.round(sr * 0.008));
+  while (a < x.length && Math.abs(x[a]) < peak * 0.05) a++;
+  a = Math.max(0, a - Math.round(sr * 0.03));
   let b = x.length - 1;
-  while (b > a && Math.abs(x[b]) < peak * 0.03) b--;
-  b = Math.min(x.length, b + Math.round(sr * 0.06), a + Math.round(sr * MAX_SAMPLE_SEC));
+  while (b > a && Math.abs(x[b]) < peak * 0.015) b--;
+  b = Math.min(x.length, b + Math.round(sr * 0.15), a + Math.round(sr * MAX_SAMPLE_SEC));
   if (b - a < sr * 0.03) return null;
   const y = x.slice(a, b);
   const g = 0.9 / peak;

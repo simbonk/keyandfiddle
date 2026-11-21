@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { SOUNDS, type SoundId, type Voice, noteOn, preloadSound, setSound, useKeyboardSound } from '../audio/instruments';
+import {
+  SOUNDS,
+  type SoundId,
+  type Voice,
+  noteOn,
+  preloadSound,
+  setSound,
+  useKeyboardSound,
+} from '../audio/instruments';
 import { getAudioContext } from '../audio/mic';
 import {
   MAX_MY_SOUNDS,
@@ -13,6 +21,7 @@ import {
   saveMySound,
 } from '../audio/sampler';
 import { Keyboard } from './Keyboard';
+import { SampleEditor } from './SampleEditor';
 
 export function useMySounds(): MySound[] {
   useEffect(() => {
@@ -43,6 +52,7 @@ export function SoundLab() {
   const [level, setLevel] = useState(0);
   const recHandle = useRef<ReturnType<typeof recordSound> | null>(null);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [tryIt, setTryIt] = useState(false);
 
   useEffect(() => {
     preloadSound(sound, octave, octave + 24);
@@ -80,6 +90,7 @@ export function SoundLab() {
       return;
     }
     setRec('idle');
+    setTryIt(true);
     setSound(`mine:${r.sound.id}`);
     preview(`mine:${r.sound.id}`);
   };
@@ -90,7 +101,12 @@ export function SoundLab() {
   return (
     <div className="sound-lab">
       <div className="panel slim">
-        <b>Pick a keyboard sound</b>
+        <div className="row sound-title">
+          <b>Pick your keyboard sound, then pick a song below</b>
+          <button className={`btn small ${tryIt ? 'primary' : 'ghost'}`} onClick={() => setTryIt((t) => !t)}>
+            🎹 {tryIt ? 'Hide keys' : 'Try it'}
+          </button>
+        </div>
         <div className="sound-grid">
           {SOUNDS.map((s) => (
             <button key={s.id} className={`sound-card ${sound === s.id ? 'on' : ''}`} onClick={() => pick(s.id)}>
@@ -116,9 +132,9 @@ export function SoundLab() {
             <b>Make your own sound</b>
             <p className="muted small">
               {rec === 'listening'
-                ? 'Go! Make your sound now…'
+                ? 'Go! Say or make your sound now…'
                 : rec === 'hearing'
-                  ? 'Got it, keep going…'
+                  ? 'Recording… tap again when you are done.'
                   : rec === 'quiet'
                     ? "I didn't hear anything. Tap the button and try a bit louder!"
                     : rec === 'denied'
@@ -127,7 +143,7 @@ export function SoundLab() {
                         ? 'Something went wrong with the microphone. Try again?'
                         : full
                           ? `You have ${MAX_MY_SOUNDS} sounds. Tap ✖ on one to make room.`
-                          : 'Tap the red button, then cough, clap, sneeze, bark or sing! It turns into a whole keyboard.'}
+                          : 'Tap the red button, then say hello, cough, clap, sneeze or sing! It turns into a whole keyboard to play songs with.'}
             </p>
           </div>
         </div>
@@ -145,7 +161,10 @@ export function SoundLab() {
                         if (sound !== id) return;
                         e.stopPropagation();
                         const i = SOUND_EMOJIS.indexOf(m.emoji);
-                        saveMySound({ ...m, emoji: SOUND_EMOJIS[(i + 1) % SOUND_EMOJIS.length] });
+                        saveMySound({
+                          ...m,
+                          emoji: SOUND_EMOJIS[(i + 1) % SOUND_EMOJIS.length],
+                        });
                       }}
                     >
                       {m.emoji}
@@ -173,40 +192,46 @@ export function SoundLab() {
             })}
           </div>
         )}
+        {(() => {
+          const sel = mine.find((m) => sound === `mine:${m.id}`);
+          return sel ? <SampleEditor sound={sel} /> : null;
+        })()}
         {mine.length > 0 && <p className="muted small tip">Tip: tap the picture on your chosen sound to change it.</p>}
       </div>
 
-      <div className="freeplay">
-        <div className="row octave-row">
-          <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
-            ◀ Lower
-          </button>
-          <span className="muted small">Play anything!</span>
-          <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
-            Higher ▶
-          </button>
+      {tryIt && (
+        <div className="freeplay">
+          <div className="row octave-row">
+            <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
+              ◀ Lower
+            </button>
+            <span className="muted small">Play anything!</span>
+            <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
+              Higher ▶
+            </button>
+          </div>
+          <Keyboard
+            start={octave}
+            end={octave + 24}
+            pressed={down}
+            height="min(26dvh, 180px)"
+            onPress={(m) => {
+              voices.current.get(m)?.kill();
+              voices.current.set(m, noteOn(m, 0.75));
+              setDown((s) => new Set(s).add(m));
+            }}
+            onRelease={(m) => {
+              voices.current.get(m)?.release();
+              voices.current.delete(m);
+              setDown((s) => {
+                const n = new Set(s);
+                n.delete(m);
+                return n;
+              });
+            }}
+          />
         </div>
-        <Keyboard
-          start={octave}
-          end={octave + 24}
-          pressed={down}
-          height="min(32dvh, 230px)"
-          onPress={(m) => {
-            voices.current.get(m)?.release();
-            voices.current.set(m, noteOn(m, 0.75));
-            setDown((s) => new Set(s).add(m));
-          }}
-          onRelease={(m) => {
-            voices.current.get(m)?.release();
-            voices.current.delete(m);
-            setDown((s) => {
-              const n = new Set(s);
-              n.delete(m);
-              return n;
-            });
-          }}
-        />
-      </div>
+      )}
     </div>
   );
 }

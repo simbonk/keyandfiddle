@@ -68,11 +68,19 @@ export function useKeyboardSound(): SoundId {
 export interface Voice {
   /** Let go of the key now, or at `at` seconds on the audio clock. */
   release(at?: number): void;
+  /** Silence it right away (stop button, or the same key pressed again). */
+  kill(): void;
 }
 
 type Param = AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam };
 
-function voice(env: GainNode, nodes: AudioScheduledSourceNode[], t0: number, releaseTau: number, maxLen: number): Voice {
+function voice(
+  env: GainNode,
+  nodes: AudioScheduledSourceNode[],
+  t0: number,
+  releaseTau: number,
+  maxLen: number,
+): Voice {
   const ctx = getAudioContext();
   const stopAll = (t: number) =>
     nodes.forEach((n) => {
@@ -85,20 +93,22 @@ function voice(env: GainNode, nodes: AudioScheduledSourceNode[], t0: number, rel
   nodes.forEach((n) => n.start(t0));
   stopAll(t0 + maxLen);
   let releasedAt = Infinity;
+  const rel = (at: number | undefined, tau: number) => {
+    const t = Math.max(at ?? ctx.currentTime, t0 + 0.01, ctx.currentTime);
+    if (t >= releasedAt && tau >= releaseTau) return;
+    releasedAt = t;
+    const p = env.gain as Param;
+    if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t);
+    else {
+      p.cancelScheduledValues(t);
+      if (t <= ctx.currentTime + 0.001) p.setValueAtTime(p.value, t);
+    }
+    p.setTargetAtTime(0, t, tau);
+    stopAll(t + tau * 7);
+  };
   return {
-    release(at?: number) {
-      const t = Math.max(at ?? ctx.currentTime, t0 + 0.01, ctx.currentTime);
-      if (t >= releasedAt) return;
-      releasedAt = t;
-      const p = env.gain as Param;
-      if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t);
-      else {
-        p.cancelScheduledValues(t);
-        if (t <= ctx.currentTime + 0.001) p.setValueAtTime(p.value, t);
-      }
-      p.setTargetAtTime(0, t, releaseTau);
-      stopAll(t + releaseTau * 7);
-    },
+    release: (at?: number) => rel(at, releaseTau),
+    kill: () => rel(undefined, Math.min(releaseTau, 0.03)),
   };
 }
 
@@ -178,7 +188,10 @@ function loadPianoSample(root: number): Promise<void> {
         const d = buf.getChannelData(0);
         let i = 0;
         while (i < d.length && Math.abs(d[i]) < 0.004) i++;
-        pianoBufs.set(root, { buf, offset: Math.max(0, i / buf.sampleRate - 0.001) });
+        pianoBufs.set(root, {
+          buf,
+          offset: Math.max(0, i / buf.sampleRate - 0.001),
+        });
       })
       .catch(() => {
         pianoLoading.delete(root);
@@ -204,7 +217,7 @@ function grand(midi: number, v: number, t0: number): Voice {
     loadPianoSample(root);
     // until the sample arrives, use the simple built-in tone
     const stop = playNote(midi, 4, v, 'synthPiano', t0);
-    return { release: () => stop() };
+    return { release: () => stop(), kill: () => stop() };
   }
   const ctx = getAudioContext();
   const src = ctx.createBufferSource();
@@ -221,15 +234,22 @@ function grand(midi: number, v: number, t0: number): Voice {
   const vc = voice(g, [], t0, 0.09, len);
   src.start(t0, s.offset);
   src.stop(t0 + len + 0.05);
+  const stopSrc = (at?: number) => {
+    const t = Math.max(at ?? ctx.currentTime, t0 + 0.01);
+    try {
+      src.stop(Math.min(t + 0.7, t0 + len + 0.05));
+    } catch {
+      /* already stopped */
+    }
+  };
   return {
     release(at?: number) {
       vc.release(at);
-      const t = Math.max(at ?? ctx.currentTime, t0 + 0.01);
-      try {
-        src.stop(Math.min(t + 0.7, t0 + len + 0.05));
-      } catch {
-        /* already stopped */
-      }
+      stopSrc(at);
+    },
+    kill() {
+      vc.kill();
+      stopSrc();
     },
   };
 }
@@ -387,7 +407,7 @@ function musicBox(midi: number, v: number, t0: number): Voice {
   return voice(g, nodes, t0, tau * 0.6, tau * 6);
 }
 
-// ---------- the child's own sound, pitched up and down across the keys ----------
+// ---------- the child's own sound, pitched up and down across the keys (higher = faster, like a tape) ----------
 
 function mine(id: string, midi: number, v: number, t0: number): Voice {
   const s = mySoundBuffer(id);
@@ -402,5 +422,7 @@ function mine(id: string, midi: number, v: number, t0: number): Voice {
   g.gain.setValueAtTime(0, t0);
   g.gain.linearRampToValueAtTime(peak, t0 + 0.003);
   const len = s.buf.duration / src.playbackRate.value;
-  return voice(g, [src], t0, 0.06, len + 0.02);
+  const vc = voice(g, [src], t0, 0.06, len + 0.02);
+  // Recorded sounds play all the way through ("hello!"), even on a quick tap.
+  return { release: () => undefined, kill: () => vc.kill() };
 }
