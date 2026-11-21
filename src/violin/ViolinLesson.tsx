@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePitchListener } from '../audio/hooks';
 import { mic } from '../audio/mic';
 import { centsBetween, midiName, midiToFreq, songLengthBeats, type Song } from '../audio/notes';
@@ -6,12 +6,9 @@ import { playNote } from '../audio/synth';
 import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
-import { CameraStage } from './CameraStage';
 import { BowMap, FingerboardMap } from './FingerboardMap';
-import { drawBow, drawFingerTarget, drawGuideBow, drawHandDots, drawViolin } from './overlay';
 import { STRINGS, VIOLIN_SONGS, violinNotes } from './theory';
 import { type VNoteState, drawViolinHighway } from './violinHighway';
-import { type Analysis, ViolinAnalyzer } from './violinModel';
 
 export function ViolinLessons() {
   const [song, setSong] = useState<Song | null>(null);
@@ -37,15 +34,12 @@ type Mode = 'wait' | 'demo';
 
 function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
   usePlayingMode(true);
-  const analyzer = useMemo(() => new ViolinAnalyzer(), []);
   const [mode, setMode] = useState<Mode>('wait');
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
-  const [camera, setCamera] = useState(true);
   const [speed, setSpeed] = useState(0.75);
   const [feedback, setFeedback] = useState<{ text: string; tone: string; id: number } | null>(null);
   const [, force] = useState(0);
-  const analysis = useRef<Analysis | null>(null);
 
   const g = useRef({
     notes: [] as VNoteState[],
@@ -154,13 +148,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
         st.lastMidi = midi;
         st.matchSince = 0;
         st.hold = { note: p, t0: f.t, last: f.t, expMs: p.beats * beatMs, reported: false };
-        const dir = analyzer.bowDir;
-        if (dir) {
-          st.bowChecked++;
-          if (dir === p.bow.dir) st.bowRight++;
-        }
-        if (dir && dir !== p.bow.dir) say(p.bow.dir === 'down' ? 'That one is a pull ⊓ (down bow)' : 'That one is a push V (up bow)', 'info');
-        else if (p.quality === 'close') say(avg > 0 ? `${midiName(p.midi)}: a little high ↓` : `${midiName(p.midi)}: a little low ↑`, 'info');
+        if (p.quality === 'close') say(avg > 0 ? `${midiName(p.midi)}: a little high ↓` : `${midiName(p.midi)}: a little low ↑`, 'info');
         else if (st.hits % 4 === 0) say(['Lovely! 🎻', 'In tune! 🎯', 'Beautiful bowing ✨', 'Keep going! 🔥'][(st.hits / 4) % 4]);
         if (mode === 'wait' && st.songBeat < p.beat) st.songBeat = Math.max(st.songBeat, p.beat - 0.1);
       }
@@ -196,7 +184,6 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
         setDone(true);
       }
     }
-    const a = analysis.current;
     drawViolinHighway({
       ctx,
       w,
@@ -207,8 +194,8 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
       current: pending(),
       waiting,
       now,
-      liveBowPos: a?.bow?.bowPos ?? null,
-      liveBowDir: analyzer.bowDir,
+      liveBowPos: null,
+      liveBowDir: null,
       heardString: st.heardString,
     });
   });
@@ -225,17 +212,6 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
   // the bow guide follows the note being held, else shows the start of the next one
   const holding = st.hold && !st.hold.reported ? st.hold.note : null;
   const arNote = holding ?? cur;
-
-  const drawAR = (ctx: CanvasRenderingContext2D, a: Analysis | null, _w: number, _h: number, now: number) => {
-    if (!a || !a.violin || !arNote) return;
-    drawViolin(ctx, a.violin, arNote.fing.string, now);
-    drawFingerTarget(ctx, a.violin, arNote.fing, now, a.left ? [8, 12, 16, 20].map((i) => a.left![i]) : null);
-    const progress = holding ? Math.min(1, (performance.now() - (st.hold?.t0 ?? 0)) / (st.hold?.expMs ?? 1)) : 0;
-    drawGuideBow(ctx, a.violin, arNote.bow, progress, arNote.fing.string);
-    if (a.left) drawHandDots(ctx, a.left, '#ff9f1c');
-    if (a.right) drawHandDots(ctx, a.right, '#2ec4f1');
-    if (a.bow) drawBow(ctx, a.bow, a.bow.angleErr === null ? null : a.bow.angleErr < 18);
-  };
 
   const total = st.notes.length;
   const stars = !total ? 0 : st.hits === total && st.inTune / total > 0.7 ? 3 : st.hits / total > 0.7 ? 2 : 1;
@@ -268,27 +244,13 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
           <option value={0.75}>¾×</option>
           <option value={1}>1×</option>
         </select>
-        <button className={`btn small ${camera ? 'primary' : ''}`} onClick={() => setCamera((c) => !c)}>
-          🪞<span className="lbl"> Mirror {camera ? 'on' : 'off'}</span>
-        </button>
         <div className="score">
           🎯 {st.hits}/{total}
         </div>
         <FullscreenButton />
       </div>
 
-      <div className={`lesson-body ${camera ? 'with-cam' : ''}`}>
-        {camera && (
-          <div className="lesson-cam">
-            <CameraStage
-              contain
-              draw={drawAR}
-              analyzer={analyzer}
-              targetString={arNote?.fing.string ?? null}
-              onAnalysis={(a) => (analysis.current = a)}
-            />
-          </div>
-        )}
+      <div className="lesson-body">
         <div className="lesson-track">
           <div className="highway-wrap">
             <canvas ref={canvasRef} className="highway" />
@@ -348,7 +310,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
               )}
             </div>
             <FingerboardMap fing={arNote?.fing ?? null} next={next?.fing ?? null} />
-            <BowMap stroke={arNote?.bow ?? null} live={analysis.current?.bow?.bowPos ?? null} />
+            <BowMap stroke={arNote?.bow ?? null} live={null} />
           </div>
         </div>
       </div>

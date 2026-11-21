@@ -8,12 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "vitest run",
-    "predev": "node scripts/copy-mediapipe.mjs",
-    "prebuild": "node scripts/copy-mediapipe.mjs"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@mediapipe/tasks-vision": "^1.2.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
