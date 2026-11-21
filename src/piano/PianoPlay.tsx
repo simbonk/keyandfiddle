@@ -50,7 +50,7 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null, onRecord }
         afterSheetMusic={
           <section className="song-group">
             <h3>🎹 Piano sounds</h3>
-            <SoundLab keys={false} />
+            <SoundLab />
           </section>
         }
         badge={(s) => {
