@@ -6,9 +6,9 @@ import { InputModeChoice, PianoPlay, loadInputMode } from './PianoPlay';
 import { type Recording, Recorder, loadRecs, recordingToSong } from './Recorder';
 import { TuneChart, TuningWizard } from './TuningWizard';
 import { MicBoostSelect } from '../ui/MicButton';
-import { FreeKeys, SoundLab, SoundSelect } from './SoundLab';
+import { SoundLab } from './SoundLab';
 
-type View = 'play' | 'sounds' | 'free' | 'record' | 'settings';
+type View = 'play' | 'sounds' | 'record' | 'settings';
 
 export function PianoTab() {
   const [cal, setCal] = useState<PianoCalibration>(loadCalibration);
@@ -29,9 +29,6 @@ export function PianoTab() {
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
             🎹 Sounds
           </button>
-          <button className={view === 'free' ? 'on' : ''} onClick={() => setView('free')}>
-            🎶 Free play
-          </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
             ⚙️<span className="lbl"> Settings</span>
           </button>
@@ -39,18 +36,6 @@ export function PianoTab() {
       </TopBarSlot>
 
       {view === 'sounds' && <SoundLab />}
-      {view === 'free' && (
-        <div className="panel slim free-panel">
-          <FreeKeys
-            height="min(58dvh, 420px)"
-            header={
-              <span className="free-sound">
-                Sound <SoundSelect />
-              </span>
-            }
-          />
-        </div>
-      )}
       {view === 'settings' && (
         <>
           <div className="panel slim settings-row">
