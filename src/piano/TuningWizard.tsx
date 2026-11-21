@@ -33,6 +33,8 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
   const levels = useRef<number[]>([]);
   const frames = useRef<CapFrame[]>([]);
   const stepStart = useRef(0);
+  // last note heard for this key, kept after the sound dies away so the button stays put
+  const [heard, setHeard] = useState<{ freq: number; raw: number; peak: number } | null>(null);
   const frame = usePitchState(mode !== null);
 
   const keys = useMemo(() => (mode ? keysFor(mode, startMidi) : []), [mode, startMidi]);
@@ -46,6 +48,11 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
     const freq = f.rawFreq && f.clarity >= 0.55 && f.rms > 0.005 ? f.rawFreq : 0;
     buf.push({ t: f.t, freq, rms: f.rms });
     while (buf.length && buf[0].t < f.t - 900) buf.shift();
+    const g = currentGuess(buf, target, f.t);
+    if (g !== null) {
+      const peak = Math.max(...buf.map((x) => x.rms), 0.02);
+      setHeard((h) => (h && Math.abs(h.freq - g) < 0.2 && h.peak >= peak ? h : { freq: g, raw: freq || g, peak }));
+    }
     const prev = keys[idx - 1];
     const r = analyzeCapture(buf, target, prev !== undefined ? draft.keys[prev] ?? 0 : 0, stepStart.current, f.t);
     if (!r) return;
@@ -59,6 +66,7 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
     stepStart.current = performance.now();
     frames.current = [];
   }, [idx, mode, mismatch]);
+  useEffect(() => setHeard(null), [idx, mode]);
 
   function accept(freq: number, peak: number) {
     const cents = centsBetween(freq, midiToFreq(target));
@@ -155,9 +163,6 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
 
   const heardFreq = frame && frame.rawFreq && frame.clarity >= 0.55 && frame.rms > 0.005 ? frame.rawFreq : 0;
   const cents = heardFreq ? centsBetween(heardFreq, midiToFreq(target)) : null;
-  const guess = currentGuess(frames.current, target, performance.now());
-  // what was actually heard, before folding into the target's octave (for the label)
-  const rawGuess = heardFreq || null;
 
   return (
     <MicGate why="To tune in to your piano I need to hear it through the microphone.">
@@ -210,10 +215,10 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
             </div>
           </div>
         )}
-        {!result && !mismatch && guess !== null && performance.now() - stepStart.current > 2500 && (
+        {!result && !mismatch && heard !== null && performance.now() - stepStart.current > 2500 && (
           <div className="row wrap">
-            <button className="btn primary" onClick={() => accept(guess, Math.max(...frames.current.map((x) => x.rms), 0.02))}>
-              ✋ Use the note I hear ({midiName(Math.round(freqToMidiFloat(rawGuess ?? guess)))}) for {midiName(target)}
+            <button className="btn primary" onClick={() => accept(heard.freq, heard.peak)}>
+              ✋ Use the note I hear ({midiName(Math.round(freqToMidiFloat(heard.raw)))}) for {midiName(target)}
             </button>
             <span className="muted small">Stuck? This remembers whatever your piano plays for this key.</span>
           </div>
