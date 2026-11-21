@@ -2114,3 +2114,11 @@ select option {
   transform: translateY(150px) rotate(var(--tv-read));
 }
 
+.tv-angled .tv-now {
+  font-size: 22px;
+  padding: 4px 14px;
+}
+.tv-angled .fb-pill,
+.tv-angled .tv-playing {
+  font-size: 22px;
+}

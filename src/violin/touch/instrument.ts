@@ -464,127 +464,120 @@ const FINGER_NAMES = ['', 'pointer', 'middle', 'ring', 'pinky'];
 const FONT = '"Baloo 2", system-ui';
 
 /** Width of the falling lane for a finger spot. */
-function gemWidth(L: Layout, semis: number) {
-  if (semis === 0) return Math.min(52, (L.nutX - L.x0) * 0.8);
-  return Math.max(24, Math.min(56, (L.semisX(semis + 0.5) - L.semisX(semis - 0.5)) * 0.92));
-}
-
 function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, now: number) {
   const strike = L.strikeY;
   const far = L.far;
   const d = L.d;
-  const ppb = Math.abs(far - strike) / f.visibleBeats;
-  const yAt = (beatsAhead: number) => strike + d * beatsAhead * ppb;
   const lo = Math.min(strike, far);
   const span = Math.abs(far - strike);
+  // Notes slide in along tracks slanted toward the scroll, the way a player
+  // holding the iPad like a violin looks up the neck (follows the word angle).
+  const phi = Math.min(0.96, Math.max(0, -readRot));
+  const ux = Math.sin(phi);
+  const uy = d * Math.cos(phi);
+  // across the track
+  const vx = Math.cos(phi);
+  const vy = -d * Math.sin(phi);
+  const trackLen = span / Math.cos(phi);
+  const ppb = trackLen / f.visibleBeats;
+  const at = (hx: number, t: number, s = 0): [number, number] => [hx + ux * t + vx * s, strike + uy * t + vy * s];
+  const right = L.pad.x - 6;
 
-  // lane guides: open strings over the scroll, finger tapes, frog/middle/tip
-  ctx.fillStyle = 'rgba(255,255,255,0.05)';
-  roundRect(ctx, L.openX - gemWidth(L, 0) / 2, lo, gemWidth(L, 0), span, 10);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.save();
+  // only the music area: not over the bow column
+  ctx.beginPath();
+  ctx.rect(L.x0, lo, right - L.x0, span);
+  ctx.clip();
+
+  // track guides: open strings and the four finger tapes
+  ctx.strokeStyle = 'rgba(255,255,255,0.09)';
   ctx.lineWidth = 2;
-  for (const [s] of TAPES) {
+  for (const hx of [L.openX, ...TAPES.map(([s]) => L.semisX(s))]) {
     ctx.beginPath();
-    ctx.moveTo(L.semisX(s), far);
-    ctx.lineTo(L.semisX(s), strike);
+    ctx.moveTo(hx, strike);
+    ctx.lineTo(...at(hx, trackLen));
     ctx.stroke();
   }
-  // beat lines
+  // beat lines (a beat is the same distance along every track, so they stay level)
   ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-  for (let b = Math.ceil(f.songBeat); b < f.songBeat + f.visibleBeats; b++) {
-    const y = yAt(b - f.songBeat);
+  for (let bt = Math.ceil(f.songBeat); bt < f.songBeat + f.visibleBeats; bt++) {
+    const y = strike + uy * (bt - f.songBeat) * ppb;
     ctx.beginPath();
     ctx.moveTo(L.x0, y);
-    ctx.lineTo(L.fbEnd, y);
+    ctx.lineTo(right, y);
     ctx.stroke();
   }
-  // landing line
-  const pulse = f.waiting ? 0.55 + 0.4 * Math.sin(now / 150) : 0.55;
-  ctx.fillStyle = f.waiting ? `rgba(255,214,10,${pulse})` : 'rgba(255,255,255,0.5)';
-  ctx.fillRect(L.x0, strike - 2, L.fbEnd - L.x0, 4);
-  ctx.fillRect(L.pad.x, strike - 2, L.pad.w, 4);
 
-  const vis = f.notes.filter((n) => n.beat + n.beats > f.songBeat - 0.2 && n.beat < f.songBeat + f.visibleBeats);
+  const W = 56; // gem thickness
+  const r = 21; // badge radius
+  const vis = f.notes.filter((n) => n.beat + n.beats > f.songBeat - 0.2 && n.beat < f.songBeat + f.visibleBeats * 1.4);
   for (const n of vis) {
     const isCur = f.current === n;
     let a = n.beat - f.songBeat;
     if (n.state === 'hit') a = Math.max(0, a);
     const b = n.beat + n.beats - f.songBeat - 0.06;
     if (b <= a) continue;
-    const y0 = yAt(a);
-    const y1 = d > 0 ? Math.min(far, yAt(b)) : Math.max(far, yAt(b));
-    const gy = Math.min(y0, y1);
-    const gh = Math.abs(y0 - y1);
+    const t0 = a * ppb;
+    const t1 = Math.min(trackLen * 1.4, b * ppb);
+    const semis = n.fing.semis;
+    const hx = semis === 0 ? L.openX : L.semisX(semis);
     ctx.globalAlpha = n.state === 'hit' ? 0.3 : 1;
 
-    // ---- finger gem, falling onto its spot on the neck ----
-    const semis = n.fing.semis;
-    const x = semis === 0 ? L.openX : L.semisX(semis);
-    const gw = gemWidth(L, semis);
+    // ---- the note gem, sliding along its track onto the landing line ----
+    const c = [at(hx, t0, -W / 2), at(hx, t0, W / 2), at(hx, t1, W / 2), at(hx, t1, -W / 2)];
+    ctx.beginPath();
+    ctx.moveTo(...c[0]);
+    for (const q of c.slice(1)) ctx.lineTo(...q);
+    ctx.closePath();
     ctx.fillStyle = STRINGS[n.fing.string].color;
-    if (readRot) {
-      // ends slanted toward the reading angle, so they face the player
-      const sl = Math.tan(Math.max(-0.7, Math.min(0.7, readRot))) * (gw / 2);
-      ctx.beginPath();
-      ctx.moveTo(x - gw / 2, gy - sl);
-      ctx.lineTo(x + gw / 2, gy + sl);
-      ctx.lineTo(x + gw / 2, gy + gh + sl);
-      ctx.lineTo(x - gw / 2, gy + gh - sl);
-      ctx.closePath();
-      ctx.lineJoin = 'round';
-    } else roundRect(ctx, x - gw / 2, gy, gw, gh, 10);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = STRINGS[n.fing.string].color;
+    ctx.stroke();
     ctx.fill();
     if (isCur) {
       ctx.lineWidth = 4;
       ctx.strokeStyle = '#fff';
       ctx.stroke();
     }
-    // badge: finger number and string
-    const r = Math.min(gw * 0.42, 17);
-    const cy = y0 + d * (r + 4);
-    if (gh > r * 2 + 6 || n.state !== 'hit') {
+    const len = t1 - t0;
+    const badge = (t: number, fill: string, stroke: string, text: string, ink: string) => {
+      const [bx, by] = at(hx, t);
       ctx.beginPath();
-      ctx.arc(x, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = n.fing.finger === 0 ? '#10082a' : FINGER_COLORS[n.fing.finger];
+      ctx.arc(bx, by, r, 0, Math.PI * 2);
+      ctx.fillStyle = fill;
       ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = stroke;
       ctx.stroke();
-      ctx.fillStyle = n.fing.finger === 0 ? '#fff' : '#10082a';
-      ctx.font = `800 ${Math.round(r * 1.2)}px ${FONT}`;
+      ctx.fillStyle = ink;
+      ctx.font = `800 ${Math.round(r * 1.35)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(n.fing.finger === 0 ? 'O' : String(n.fing.finger), x, cy + 1);
-      if (gh > r * 4 + 10) {
-        ctx.fillStyle = '#10082a';
-        ctx.font = `800 ${Math.round(r * 1.1)}px ${FONT}`;
-        ctx.fillText(STRINGS[n.fing.string].name, x, cy + d * (r * 2 + 2));
-      }
+      ctx.fillText(text, bx, by + 1);
+      ctx.textBaseline = 'alphabetic';
+    };
+    // finger number at the front, then the string letter, then the bow sign
+    if (len > r * 2 + 6 || n.state !== 'hit') {
+      const fg = n.fing.finger;
+      badge(t0 + r + 6, fg === 0 ? '#10082a' : FINGER_COLORS[fg], '#fff', fg === 0 ? 'O' : String(fg), fg === 0 ? '#fff' : '#10082a');
+    }
+    if (len > r * 4 + 14) {
+      const [sx, sy] = at(hx, t0 + r * 3 + 12);
+      ctx.fillStyle = '#10082a';
+      ctx.font = `800 ${Math.round(r * 1.6)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(STRINGS[n.fing.string].name, sx, sy + 1);
       ctx.textBaseline = 'alphabetic';
     }
-
-    // ---- bow sign on the gem: orange ⊓ = down bow, blue V = up bow ----
-    const down = n.bow.dir === 'down';
-    if (gh > r * 6 + 16) {
-      const by = cy + d * (r * 4 + 8);
-      ctx.beginPath();
-      ctx.arc(x, by, r, 0, Math.PI * 2);
-      ctx.fillStyle = down ? DOWN : UP;
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#10082a';
-      ctx.stroke();
-      ctx.fillStyle = '#10082a';
-      ctx.font = `800 ${Math.round(r * 1.1)}px ${FONT}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(down ? '⊓' : 'V', x, by + 1);
-      ctx.textBaseline = 'alphabetic';
+    if (len > r * 6 + 22) {
+      const down = n.bow.dir === 'down';
+      badge(t0 + r * 5 + 18, down ? DOWN : UP, '#10082a', down ? '⊓' : 'V', '#10082a');
     }
     // the next note: a moving dotted line from the gem to the spot to press
     if (isCur && n.state !== 'hit') {
-      const ty = L.stringY(n.fing.string, Math.max(L.nutX, x));
+      const ty = L.stringY(n.fing.string, Math.max(L.nutX, hx));
       ctx.save();
       ctx.globalAlpha = 0.9;
       ctx.strokeStyle = '#fff';
@@ -592,13 +585,21 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
       ctx.setLineDash([6, 8]);
       ctx.lineDashOffset = (-now / 25) * d;
       ctx.beginPath();
-      ctx.moveTo(x, y0);
-      ctx.lineTo(x, ty);
+      ctx.moveTo(...at(hx, t0));
+      ctx.lineTo(hx, strike);
+      ctx.lineTo(hx, ty);
       ctx.stroke();
       ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
+  ctx.restore();
+
+  // landing line
+  const pulse = f.waiting ? 0.55 + 0.4 * Math.sin(now / 150) : 0.55;
+  ctx.fillStyle = f.waiting ? `rgba(255,214,10,${pulse})` : 'rgba(255,255,255,0.5)';
+  ctx.fillRect(L.x0, strike - 2, L.fbEnd - L.x0, 4);
+  ctx.fillRect(L.pad.x, strike - 2, L.pad.w, 4);
 }
 
 /**
@@ -792,8 +793,8 @@ function drawViolinSurface(
       const col = 'rgba(242,227,196,0.9)';
       const off = readRot ? e * Math.abs(Math.sin(readRot)) * 16 : 0;
       textBlock(ctx, x, ly + e * 6 - 4 + off, [
-        { text: num, font: (px) => `800 ${px}px ${FONT}`, px: 13, color: col, dy: e > 0 ? 0 : 13 },
-        { text: name, font: (px) => `700 ${px}px ${FONT}`, px: 11, color: col, dy: e > 0 ? 13 : 0 },
+        { text: num, font: (px) => `800 ${px}px ${FONT}`, px: 20, color: col, dy: e > 0 ? 0 : 18 },
+        { text: name, font: (px) => `700 ${px}px ${FONT}`, px: 15, color: col, dy: e > 0 ? 18 : 0 },
       ]);
     }
   }
@@ -832,8 +833,8 @@ function drawViolinSurface(
     ctx.fillText(STRINGS[s].name, L.openX, L.top ? Math.max(10, ny) : Math.min(L.h - 10, ny));
     ctx.textBaseline = 'alphabetic';
     if (showNames) {
-      ctx.font = `700 ${Math.round(Math.max(9, Math.min(12, sp0 * 0.42)))}px ${FONT}`;
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = `800 ${Math.round(Math.max(11, Math.min(17, sp0 * 0.6)))}px ${FONT}`;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       for (let k = 1; k <= 8; k++) {
         const x = L.semisX(k);
         ctx.fillText(midiName(STRINGS[s].midi + k).replace(/\d/, ''), x, L.stringY(s, x) + e * L.spacing(x) * 0.45 + 3);
@@ -893,15 +894,15 @@ function drawViolinSurface(
       tgt.finger === 0
         ? `open ${STRINGS[tgt.string].name}: no finger`
         : `${FINGER_NAMES[tgt.finger]} finger (${tgt.finger}) on ${STRINGS[tgt.string].name}`;
-    ctx.font = `800 18px ${FONT}`;
-    const tw = ctx.measureText(label).width + 24;
+    ctx.font = `800 24px ${FONT}`;
+    const tw = ctx.measureText(label).width + 28;
     // turned, the pill reaches further along y and less along x
-    const ext = { x: (tw / 2) * Math.abs(Math.cos(readRot)) + 15, y: (tw / 2) * Math.abs(Math.sin(readRot)) + 15 };
-    const ly = edgeIn(Math.max(L.nutX, x), L.spacing(x)) + e * (15 + ext.y);
+    const ext = { x: (tw / 2) * Math.abs(Math.cos(readRot)) + 19, y: (tw / 2) * Math.abs(Math.sin(readRot)) + 19 };
+    const ly = edgeIn(Math.max(L.nutX, x), L.spacing(x)) + e * (19 + ext.y);
     const lx = Math.max(L.x0 + ext.x, x);
     turned(ctx, lx, ly, () => {
       ctx.fillStyle = col;
-      roundRect(ctx, -tw / 2, -15, tw, 30, 15);
+      roundRect(ctx, -tw / 2, -19, tw, 38, 19);
       ctx.fill();
       ctx.fillStyle = '#10082a';
       ctx.textBaseline = 'middle';
@@ -941,10 +942,10 @@ function drawViolinSurface(
     if (semis > 0) {
       // name beyond the neck, where the fingertip doesn't hide it
       const name = midiName(STRINGS[f.s].midi + Math.round(semis)).replace(/\d/, '');
-      ctx.font = `800 15px ${FONT}`;
+      ctx.font = `800 24px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#fff';
-      ctx.fillText(name, x, edgeIn(x, L.spacing(x)) + e * 18 + (e > 0 ? 0 : 6));
+      ctx.fillText(name, x, edgeIn(x, L.spacing(x)) + e * 26 + (e > 0 ? 0 : 8));
     }
   }
 

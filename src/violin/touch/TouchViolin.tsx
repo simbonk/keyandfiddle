@@ -122,6 +122,8 @@ function VoiceSelect() {
 }
 
 const OPTS_KEY = "kf.tv.opts";
+/** px kept clear under the status bar when the violin is drawn sideways in portrait */
+const STATUS_BAR = 32;
 interface StoredOpts extends ViolinOptions {
   names: boolean;
   /** strings further apart than a real violin */
@@ -215,11 +217,12 @@ function TouchViolinPlay({
     rot === "none"
       ? {}
       : {
-          width: vp.h,
+          // keep clear of the status bar along the top of the screen (blurry there)
+          width: vp.h - STATUS_BAR,
           height: vp.w,
           transform:
             rot === "cw"
-              ? `translateX(${vp.w}px) rotate(90deg)`
+              ? `translate(${vp.w}px, ${STATUS_BAR}px) rotate(90deg)`
               : `translateY(${vp.h}px) rotate(-90deg)`,
         };
 
