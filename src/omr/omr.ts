@@ -39,6 +39,8 @@ export interface OmrNote {
   beats: number;
   /** tied to the next note of the same pitch (they play as one long note) */
   tie?: boolean;
+  /** a small grace note, played quickly just before the next note */
+  grace?: boolean;
 }
 
 export interface OmrRest {
@@ -282,17 +284,17 @@ function nearestStaff(staves: Staff[], y: number): number {
   return best;
 }
 
-function findStem(b: Bin, x: number, y: number, s: number) {
+function findStem(b: Bin, x: number, y: number, s: number, anyWidth = false) {
   // the longest stem on each side; then the shorter of the two valid ones, so a
   // chord note touching another voice's head doesn't borrow that voice's stem
-  const up = stemDir(b, x, y, s, -1);
-  const down = stemDir(b, x, y, s, 1);
+  const up = stemDir(b, x, y, s, -1, anyWidth);
+  const down = stemDir(b, x, y, s, 1, anyWidth);
   const ok = (st: typeof up) => st.len >= s * 2.3;
   if (ok(up) && ok(down)) return up.len <= down.len ? up : down;
   return ok(up) ? up : ok(down) ? down : up.len >= down.len ? up : down;
 }
 
-function stemDir(b: Bin, x: number, y: number, s: number, only: number) {
+function stemDir(b: Bin, x: number, y: number, s: number, only: number, anyWidth = false) {
   let best = { len: 0, col: 0, end: 0, dir: only };
   for (const dir of [only]) {
     // stem up sits on the right of the head, stem down on the left
@@ -312,8 +314,8 @@ function stemDir(b: Bin, x: number, y: number, s: number, only: number) {
       }
       // must be thin (not a beam or head mass) a little away from the head
       // (in a chord the stem runs past other heads, so look along its length)
-      let thin = false;
-      for (let k = 1.6; k <= Math.max(1.6, len / s - 0.3) && !thin; k += 0.5) thin = b.hRun(col, y + dir * s * k) < s * 0.6;
+      let thin = anyWidth;
+      for (let k = 1.0; k <= Math.max(1.0, len / s - 0.3) && !thin; k += 0.5) thin = b.hRun(col, y + dir * s * k) < s * 0.6;
       if (len > best.len && thin) best = { len, col, end: y + dir * len, dir };
     }
   }
@@ -811,14 +813,45 @@ export function recognize(g0: Gray): OmrResult {
     }
   }
   cands.sort((a, c) => c.f - a.f);
-  const heads: { x: number; y: number; filled: boolean }[] = [];
+  const heads: { x: number; y: number; filled: boolean; grace?: boolean }[] = [];
   for (const c of cands) {
     if (heads.some((h) => Math.abs(h.x - c.x) < s * 0.9 && Math.abs(h.y - c.y) < s * 0.7)) continue;
     // reject long horizontal ink (beams, thick ledger clusters)
     if (b.hRun(c.x, c.y) > s * 2.6) continue;
-    // small grace notes are ornaments, not notes to play in time
+    // a small head is a grace note, sorted out below
     if (b.frac(c.x, c.y, s * 1.2, s * 0.8) < 0.7) continue;
     heads.push({ x: c.x, y: c.y, filled: true });
+  }
+  // grace notes: small filled heads (about two thirds the size)
+  const small: { x: number; y: number; f: number }[] = [];
+  for (const st of staves) {
+    const yA = Math.max(0, Math.round(st.lines[0] - s * 4));
+    const yB = Math.min(g.h - 1, Math.round(st.lines[4] + s * 4));
+    for (let y = yA; y <= yB; y++) {
+      for (let x = Math.round(st.x0 + s * 1.5); x <= st.x1; x++) {
+        if (!bin[y * g.w + x]) continue;
+        const f = b.frac(x, y, s * 0.6, s * 0.4);
+        if (f < 0.85) continue;
+        small.push({ x, y, f });
+      }
+    }
+  }
+  small.sort((a, c) => c.f - a.f);
+  const graces: { x: number; y: number }[] = [];
+  for (const c of small) {
+    if (heads.some((h) => Math.abs(h.x - c.x) < s * 1.2 && Math.abs(h.y - c.y) < s * 1.0)) continue;
+    // where a barline crosses a staff line is not a head either
+    // (or a lump on a stem): a long vertical line runs right through it
+    let up = c.y;
+    let dn = c.y;
+    while (up > 0 && b.at(c.x, up - 1)) up--;
+    while (dn < g.h - 1 && b.at(c.x, dn + 1)) dn++;
+    if (dn - up > s * 2.2) continue;
+    if (graces.some((h) => Math.abs(h.x - c.x) < s * 0.6 && Math.abs(h.y - c.y) < s * 0.5)) continue;
+    if (b.hRun(c.x, c.y) > s * 1.6) continue;
+    // small, not a full head: the ring around it is mostly paper
+    if (b.frac(c.x, c.y, s * 1.2, s * 0.8) > 0.6) continue;
+    graces.push({ x: c.x, y: c.y });
   }
   // a hollow head's thin rim can break up after thresholding and let its hole
   // leak out; look for holes with a slightly darker-leaning threshold
@@ -861,6 +894,15 @@ export function recognize(g0: Gray): OmrResult {
       heads.push({ x: h.x, y: h.y, filled: false });
     }
   }
+  // grace-note stems are thin and come out grey, so look for them more leniently
+  const thrThin = Math.min(235, thr + (255 - thr) * 0.35);
+  const thin = new Uint8Array(g.w * g.h);
+  for (let i = 0; i < thin.length; i++) thin[i] = g.data[i] <= thrThin ? 1 : 0;
+  const bt = new Bin(g.w, g.h, thin);
+  bt.integral();
+  // small blobs stacked in one column are digits or bits of a chord, not grace notes
+  const lone = graces.filter((gh) => !graces.some((o) => o !== gh && Math.abs(o.x - gh.x) < s * 0.6 && Math.abs(o.y - gh.y) < s * 3));
+  for (const gh of lone) heads.push({ x: gh.x, y: gh.y, filled: true, grace: true });
 
   // --- classify
   let notes: OmrNote[] = [];
@@ -871,8 +913,8 @@ export function recognize(g0: Gray): OmrResult {
     if (h.x <= ks.start[si]) continue;
     // the thick final barline looks like a stack of filled heads
     if (h.x > st.x1 - s * 1.2) continue;
-    const stem = findStem(b, h.x, h.y, s);
-    const hasStem = stem.len >= s * 2.3;
+    const stem = h.grace ? findStem(bt, h.x, h.y, s * 0.8, true) : findStem(b, h.x, h.y, s);
+    const hasStem = stem.len >= s * (h.grace ? 1.2 : 2.3);
     // filled heads always have a stem; without one it's probably a clef/digit/text blob
     if (h.filled && !hasStem) continue;
     const step = Math.round((st.lines[4] - h.y) / (st.space / 2));
@@ -889,11 +931,31 @@ export function recognize(g0: Gray): OmrResult {
       filled: h.filled,
       stem: hasStem,
       beams,
-      dotted: hasDot(b, h.x, h.y, s),
+      dotted: !h.grace && hasDot(b, h.x, h.y, s),
       beats: 0,
     };
     n.beats = noteBeats(n);
+    if (h.grace) {
+      n.grace = true;
+      n.beats = 0.125;
+    }
     notes.push(n);
+  }
+
+  // a "grace note" lying along a real note's stem or flag is part of that note
+  {
+    const spans = notes
+      .filter((n) => !n.grace && n.stem)
+      .map((n) => {
+        const st = findStem(b, n.x, n.y, s);
+        return { col: st.col, y0: Math.min(n.y, st.end), y1: Math.max(n.y, st.end) };
+      });
+    notes = notes.filter(
+      (n) =>
+        !n.grace ||
+        (!spans.some((p) => Math.abs(p.col - n.x) < s * 0.7 && n.y > p.y0 - s * 0.5 && n.y < p.y1 + s * 0.5) &&
+          findStem(bt, n.x, n.y, s * 0.8, true).len <= s * 3.2),
+    );
   }
 
   // --- barlines and time signatures (digits look like note heads)
@@ -994,7 +1056,7 @@ export function toTimeline(r: OmrResult): TimedNote[] {
       for (const si of idx) {
         type Ev = { x: number; beats: number; note?: OmrNote };
         const evs: Ev[] = [
-          ...r.notes.filter((n) => n.staff === si && inBar(n.x)).map((n) => ({ x: n.x, beats: n.beats, note: n })),
+          ...r.notes.filter((n) => n.staff === si && inBar(n.x) && !n.grace).map((n) => ({ x: n.x, beats: n.beats, note: n })),
           ...rests.filter((q) => q.staff === si && inBar(q.x)).map((q) => ({ x: q.x, beats: q.beats })),
         ].sort((a, b) => a.x - b.x);
         if (!evs.length) continue;
@@ -1013,6 +1075,15 @@ export function toTimeline(r: OmrResult): TimedNote[] {
           at += adv.length ? Math.min(...adv) : 0;
         }
         len = Math.max(len, at);
+        // grace notes squeeze in just before the next real note
+        const main = placed.filter((p) => p.n.staff === si);
+        const gs = r.notes.filter((n) => n.staff === si && inBar(n.x) && n.grace).sort((a, b) => b.x - a.x);
+        for (const gn of gs) {
+          const next = main.filter((p) => p.n.x > gn.x).sort((a, b) => a.n.x - b.n.x)[0];
+          if (!next) continue;
+          const before = placed.filter((p) => p.n.grace && p.n.staff === si && p.n.x > gn.x && p.n.x < next.n.x).length;
+          placed.push({ n: gn, at: Math.max(0, next.at - 0.125 * (before + 1)) });
+        }
       }
       if (!any) continue;
       if (len === 0 && fullRest) len = lastLen;
