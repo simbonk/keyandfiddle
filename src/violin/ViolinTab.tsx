@@ -2,10 +2,10 @@ import { TopBarSlot } from '../ui/chrome';
 import { useState } from 'react';
 import { ViolinLessons } from './ViolinLesson';
 import { ViolinTuner } from './ViolinTuner';
-import { TouchViolinTab } from './touch/TouchViolin';
+import { TouchViolinTab, ViolinSounds } from './touch/TouchViolin';
 
-// Same layout as the piano: Songs, the touch instrument, then Settings.
-type View = 'songs' | 'touch' | 'settings';
+// Same layout as the piano: Songs, Sounds, the touch violin, then Settings.
+type View = 'songs' | 'sounds' | 'touch' | 'settings';
 
 export function ViolinTab() {
   const [view, setView] = useState<View>('songs');
@@ -16,6 +16,9 @@ export function ViolinTab() {
           <button className={view === 'songs' ? 'on' : ''} onClick={() => setView('songs')}>
             🎵 Songs
           </button>
+          <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
+            🎤 Sounds
+          </button>
           <button className={view === 'touch' ? 'on' : ''} onClick={() => setView('touch')}>
             📱 Touch violin
           </button>
@@ -25,6 +28,7 @@ export function ViolinTab() {
         </nav>
       </TopBarSlot>
       {view === 'songs' && <ViolinLessons />}
+      {view === 'sounds' && <ViolinSounds />}
       {view === 'touch' && <TouchViolinTab />}
       {view === 'settings' && (
         <>

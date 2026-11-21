@@ -27,7 +27,7 @@ export function PianoTab() {
             🎵 Songs
           </button>
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
-            🎹 Sounds
+            🎤 Sounds
           </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
             ⚙️<span className="lbl"> Settings</span>

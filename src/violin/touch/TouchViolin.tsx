@@ -34,13 +34,12 @@ import { previewVoice } from "./engine";
 
 /** The "Touch violin" screen: free play or a song, played on the iPad held like a violin. */
 export function TouchViolinTab() {
-  const [song, setSong] = useState<Song | null | "free" | "sounds">(null);
+  const [song, setSong] = useState<Song | null | "free">(null);
   const voice = useViolinVoice();
   const mine = useMySounds();
   useEffect(() => {
     loadViolin();
   }, []);
-  if (song === "sounds") return <ViolinSounds onBack={() => setSong(null)} />;
   const vInfo =
     VIOLIN_VOICES.find((v) => v.id === voice) ??
     (() => {
@@ -77,13 +76,13 @@ export function TouchViolinTab() {
                 Just play! Every note on the four strings.
               </span>
             </button>
-            <button className="song-card" onClick={() => setSong("sounds")}>
+            <div className="song-card static">
               <span className="song-emoji">{vInfo.emoji}</span>
-              <b>Sounds</b>
+              <b>Sound: {vInfo.name}</b>
               <span className="muted small">
-                Now: {vInfo.name}. Try a cello, a cat, or record your own!
+                Change it in 🎤 Sounds at the top.
               </span>
-            </button>
+            </div>
           </div>
         </>
       }
@@ -91,16 +90,11 @@ export function TouchViolinTab() {
   );
 }
 
-/** Pick the touch violin's sound, or record your own. */
-function ViolinSounds({ onBack }: { onBack: () => void }) {
+/** Pick the touch violin's sound, or record your own (the violin's 🎤 Sounds tab). */
+export function ViolinSounds() {
   const voice = useViolinVoice();
   return (
     <div className="lesson">
-      <div className="row">
-        <button className="btn small ghost" onClick={onBack}>
-          ◀ Back
-        </button>
-      </div>
       <SoundLab
         keys={false}
         title="Pick how your violin sounds"
