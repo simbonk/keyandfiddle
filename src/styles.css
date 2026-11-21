@@ -1286,11 +1286,12 @@ select option {
     max-height: 110px;
   }
 }
-@media (max-width: 700px) {
-  .topbar .tabs .lbl,
+@media (max-width: 360px) {
   .brand {
     display: none;
   }
+}
+@media (max-width: 700px) {
   .game-bar .lbl {
     display: none;
   }
@@ -2410,56 +2411,214 @@ select option {
   justify-content: center;
 }
 
-/* iPhone held upright: the app menu sits at the bottom, in thumb reach (iPad keeps it on top) */
-@media (max-width: 600px) and (orientation: portrait) {
-  .app > .topbar {
-    order: 2;
-    padding: 6px 10px 4px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(10, 6, 30, 0.35);
-  }
-  .app > .main {
-    padding-top: 8px;
-  }
+/* iPhone held upright: instrument switch stays in the header, the screen tabs
+   sit at the bottom as a tab bar in thumb reach (iPad keeps them on top). */
+.tabbar {
+  flex-shrink: 0;
+  padding: 6px 10px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 6, 30, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.app.playing > .tabbar {
+  display: none;
+}
+.tabbar .subnav {
+  gap: 4px;
+}
+.tabbar .subnav button {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  min-height: 50px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  line-height: 1.1;
+}
+.tabbar .subnav button.on {
+  background: transparent;
+  color: var(--primary);
+}
+.tabbar .subnav .nm {
+  font-size: 11px;
+  white-space: nowrap;
 }
 @media (max-width: 600px) and (orientation: portrait) {
-  /* tab-bar style: icon over a small name, equal widths, everything fits */
-  .app > .topbar {
-    gap: 6px;
-  }
   .app > .topbar .fs-top {
     display: none;
   }
-  .app > .topbar .subnav-slot {
-    overflow: visible;
+  .app > .topbar {
+    justify-content: space-between;
   }
-  .app > .topbar .subnav {
-    gap: 4px;
-  }
-  .app > .topbar .subnav button {
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1px;
-    padding: 3px 2px;
-    min-height: 48px;
-    border-radius: 12px;
-    line-height: 1.1;
-  }
-  .app > .topbar .subnav .ico {
-    font-size: 20px;
-  }
-  .app > .topbar .subnav .nm {
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-  }
-  .app > .topbar .tabs button {
-    padding: 4px 10px;
-  }
+}
+
+
+/* ---------- line icons in the app chrome ---------- */
+.ic {
+  display: inline-block;
+  vertical-align: -0.2em;
+  flex-shrink: 0;
+}
+.subnav button,
+.tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* touch violin play bar: every button keeps a tiny name under its icon */
+.touch-violin .game-bar .btn.small:has(.lbl),
+.touch-violin .game-bar .mode-seg button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.touch-violin .game-bar .lbl {
+  display: block !important;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+/* dim the instrument behind the Start card until you press Start */
+.tv-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 6, 30, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  pointer-events: none;
+}
+
+/* one-line banner above a song list */
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.banner .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tv-over .overlay-center {
+  background: transparent;
+}
+/* Touch | Real switch at the top of the violin and piano song lists */
+.play-on {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.play-on .seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* sheet music review header: title + note count badge, Save on the right */
+.pi-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pi-head h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 20px;
+}
+.pi-count {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+}
+.pi-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 16px;
+}
+.pi-head .btn.ghost,
+.pi-tools .btn,
+.pi-pages .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pi-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  flex-wrap: wrap;
+}
+.pi-legend .btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pi-key {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ff3d9a;
+  background: rgba(255, 80, 160, 0.2);
+  vertical-align: -1px;
+  margin-right: 4px;
+}
+.pi-key.l {
+  border-color: #1e88ff;
+  background: rgba(40, 140, 255, 0.2);
+}
+.pi-helplist {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+.btn .ic,
+.btn-icon .ic {
+  vertical-align: -0.22em;
+}
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }

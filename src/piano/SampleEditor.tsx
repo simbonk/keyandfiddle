@@ -1,3 +1,4 @@
+import { Icon } from '../ui/Icon';
 import { useEffect, useRef, useState } from 'react';
 import { noteOn } from '../audio/instruments';
 import { type MySound, saveMySound } from '../audio/sampler';
@@ -135,7 +136,7 @@ export function SampleEditor({
       />
       <div className="sample-editor-actions">
         <button className="btn small" onClick={play}>
-          ▶ Hear it
+          <Icon name="play" size={16} /> Hear it
         </button>
         <button className="btn small ghost" onClick={onDelete}>
           🗑 Delete

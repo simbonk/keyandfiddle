@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 import { useRef, useState } from 'react';
 import type { Song } from '../audio/notes';
 import { PhotoImport } from '../omr/PhotoImport';
@@ -120,7 +121,7 @@ export function SongPicker({
                       if (window.confirm(`Remove “${sc.title}”?`)) removeScore(sc.id);
                     }}
                   >
-                    ✕
+                    <Icon name="close" size={16} />
                   </button>
                 </div>
               );
@@ -158,7 +159,7 @@ export function SongPicker({
                       fileRef.current?.click();
                     }}
                   >
-                    📷 Choose a photo or file
+                    <Icon name="camera" size={18} /> Choose a photo or file
                   </button>
                   <button className="btn ghost" onClick={() => setShowImport(false)}>
                     Cancel

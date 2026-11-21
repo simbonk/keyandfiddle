@@ -1,3 +1,4 @@
+import { Icon } from "../ui/Icon";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { finish, type RawNote } from "../audio/importScore";
 import { midiName } from "../audio/notes";
@@ -190,6 +191,7 @@ export function PhotoImport({
   // undo / redo: every change saves what was there before
   type Snap = { key: number; res: OmrResult; off: Set<number> };
   const [undoStack, setUndo] = useState<Snap[]>([]);
+  const [help, setHelp] = useState(false);
   const [redoStack, setRedo] = useState<Snap[]>([]);
   const snap = () => {
     if (!res) return;
@@ -529,14 +531,14 @@ export function PhotoImport({
   if (err || (pages.length === 1 && page?.err))
     return (
       <div className="panel">
-        <h2>📷 Reading your sheet music</h2>
+        <h2>Reading your sheet music</h2>
         <div className="toast warn">{err ?? page?.err}</div>
         <p className="muted small">
           Works best with a clear, straight screenshot of printed music (not
           handwriting).
         </p>
         <button className="btn" onClick={onCancel}>
-          ◀ Back
+          <Icon name="back" /> Back
         </button>
       </div>
     );
@@ -546,11 +548,23 @@ export function PhotoImport({
 
   return (
     <div className="panel photo-import">
-      <div className="row wrap">
-        <button className="btn small ghost" onClick={onCancel}>
-          ◀ Cancel
+      <div className="pi-head">
+        <button className="btn small ghost" onClick={onCancel} aria-label="Cancel">
+          <Icon name="back" /> Cancel
         </button>
-        <h2 style={{ margin: 0 }}>📷 Check the notes I found</h2>
+        <h2>
+          Check the notes
+          {res && <span className="pi-count">{timeline.length} notes{off.size ? ` · ${off.size} off` : ""}</span>}
+        </h2>
+        {res && (
+          <button
+            className="btn primary pi-save"
+            disabled={!res.notes.length || pages.some((p) => !p.res && !p.err)}
+            onClick={save}
+          >
+            <Icon name="check" size={18} /> Save
+          </button>
+        )}
       </div>
       <div className="row wrap pi-pages">
         {pages.map((p, i) => (
@@ -562,25 +576,25 @@ export function PhotoImport({
               setSel(null);
             }}
           >
-            {p.err ? "⚠️" : p.res ? "📄" : "⏳"} Page {i + 1}
+            {p.err ? "⚠️ " : p.res ? "" : "… "}Page {i + 1}
           </button>
         ))}
         {pages.length > 1 && (
           <>
             <button className="btn small" disabled={pi === 0} onClick={() => movePage(-1)} aria-label="Move page earlier">
-              ◀ Move
+              <Icon name="back" size={16} /> Move
             </button>
             <button className="btn small" disabled={pi === pages.length - 1} onClick={() => movePage(1)} aria-label="Move page later">
               Move ▶
             </button>
             <button className="btn small" onClick={removePage}>
-              ✕ Remove page
+              <Icon name="trash" size={16} /> Remove page
             </button>
           </>
         )}
         {pages.length < MAX_PAGES && (
           <button className="btn small" onClick={() => addRef.current?.click()}>
-            ➕ Add a page
+            <Icon name="plus" size={16} /> Add a page
           </button>
         )}
         <input
@@ -596,31 +610,38 @@ export function PhotoImport({
         />
       </div>
       {page?.err && <div className="toast warn">Page {pi + 1}: {page.err}</div>}
-      {!res && !page?.err && <p>⏳ Reading page {pi + 1}…</p>}
+      {!res && !page?.err && <p className="muted">Reading page {pi + 1}…</p>}
       {res && (
         <>
-          <p className="muted small">
-            I found {res.notes.length} notes. <b>Tap a circle</b> to switch a
-            wrong note off (tap again to bring it back).{" "}
-            <b>Tap an empty spot</b> to add a note I missed, or{" "}
-            <b>hold and slide up or down</b> to pick its pitch, then let go.{" "}
-            <b>Press and hold</b> a circle to change its pitch, sharp/flat or
-            length. Pink = right hand, blue = left hand.
-          </p>
+          <div className="pi-legend">
+            <span><i className="pi-key r" /> Right hand</span>
+            <span><i className="pi-key l" /> Left hand</span>
+            <button className="btn small ghost" onClick={() => setHelp((h) => !h)} aria-expanded={help}>
+              <Icon name="help" size={16} /> How to fix notes
+            </button>
+          </div>
+          {help && (
+            <ul className="pi-helplist muted small">
+              <li><b>Tap a circle</b> to switch a wrong note off. Tap again to bring it back.</li>
+              <li><b>Tap an empty spot</b> to add a note I missed, or <b>hold and slide</b> up or down to pick its pitch.</li>
+              <li><b>Press and hold a circle</b> to change its pitch, sharp or flat, or length.</li>
+              <li><b>Pinch</b> the music to zoom.</li>
+            </ul>
+          )}
           <div className="row wrap pi-tools">
             <button
               className="btn small"
               disabled={!undoStack.length}
               onClick={undo}
             >
-              ↩️ Undo
+              <Icon name="undo" size={18} /> Undo
             </button>
             <button
               className="btn small"
               disabled={!redoStack.length}
               onClick={redo}
             >
-              ↪️ Redo
+              <Icon name="redo" size={18} /> Redo
             </button>
             <span className="pi-zoom-btns">
               <button
@@ -629,7 +650,7 @@ export function PhotoImport({
                 onClick={() => zoomTo(zoomRef.current / 1.5)}
                 aria-label="Zoom out"
               >
-                ➖
+                <Icon name="minus" size={18} />
               </button>
               <span className="muted small">{Math.round(zoom * 100)}%</span>
               <button
@@ -638,10 +659,9 @@ export function PhotoImport({
                 onClick={() => zoomTo(zoomRef.current * 1.5)}
                 aria-label="Zoom in"
               >
-                ➕
+                <Icon name="plus" size={18} />
               </button>
             </span>
-            <span className="muted small">Pinch the music to zoom in.</span>
           </div>
           <div className="row wrap pi-controls">
             <label className="field">
@@ -680,7 +700,7 @@ export function PhotoImport({
             </label>
             {playingId === null ? (
               <button className="btn" onClick={play}>
-                ▶ Hear it
+                <Icon name="play" size={16} /> Hear it
               </button>
             ) : (
               <button className="btn" onClick={stop}>
@@ -830,22 +850,8 @@ export function PhotoImport({
           )}
         </div>
       </div>
-      {res && (
-        <div className="row">
-          <button
-            className="btn big primary"
-            disabled={!res.notes.length || pages.some((p) => !p.res && !p.err)}
-            onClick={save}
-          >
-            ✅ Save song{pages.length > 1 ? ` (${pages.length} pages)` : ""}
-          </button>
-          <span className="muted small">
-            {pages.length > 1 ? `This page: ` : ""}
-            {timeline.length} notes
-            {off.size ? `, ${off.size} switched off` : ""}
-            {pages.some((p) => !p.res && !p.err) ? " · still reading the other pages…" : ""}
-          </span>
-        </div>
+      {res && pages.some((p) => !p.res && !p.err) && (
+        <p className="muted small">Still reading the other pages…</p>
       )}
     </div>
   );

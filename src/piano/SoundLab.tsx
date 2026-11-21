@@ -1,3 +1,4 @@
+import { Icon } from '../ui/Icon';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   SOUNDS,
@@ -222,7 +223,7 @@ export function SoundLab({
           <div className="toast undo-toast">
             🗑 Deleted {undo.sound.emoji} {undo.sound.name}
             <button className="btn small" onClick={restore}>
-              ↩ Undo
+              <Icon name="undo" size={16} /> Undo
             </button>
           </div>
         )}

@@ -6,14 +6,14 @@ import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
 import { BowMap, FingerboardMap } from './FingerboardMap';
-import { MicBoostSelect } from '../ui/MicButton';
 import { ViolinTuner } from './ViolinTuner';
+import { Icon } from '../ui/Icon';
 import { VoiceSelect } from './touch/TouchViolin';
 import { loadViolin, playBowedNote } from './touch/engine';
 import { STRINGS, VIOLIN_SONGS, violinNotes } from './theory';
 import { type VNoteState, drawViolinHighway } from './violinHighway';
 
-export function ViolinLessons() {
+export function ViolinLessons({ header }: { header?: React.ReactNode }) {
   const [song, setSong] = useState<Song | null>(null);
   if (!song) {
     return (
@@ -22,10 +22,12 @@ export function ViolinLessons() {
         instrument="violin"
         onPick={setSong}
         intro={
-          <p className="muted">
-            Two tracks come at you: the <b>left track</b> shows which string and which finger, the <b>right track</b>{' '}
-            shows which part of the bow to use and which way to move it.
-          </p>
+          <>
+            {header}
+            <div className="banner">
+              <span>Left track: string and finger · Right track: bow</span>
+            </div>
+          </>
         }
       />
     );
@@ -246,26 +248,21 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
     <div className="lesson">
       <div className="game-bar">
         <button className="btn small ghost" onClick={onExit}>
-          ◀<span className="lbl"> Tunes</span>
+          <Icon name="back" /><span className="lbl"> Songs</span>
         </button>
         <div className="game-title">
           {song.emoji} {song.title}
         </div>
-        <div className="seg">
+        <div className="seg mode-seg">
           <button className={mode === 'wait' ? 'on' : ''} onClick={() => { setMode('wait'); setRunning(false); reset(); }}>
-            🐢<span className="lbl"> Wait for me</span>
+            <Icon name="wait" /><span className="lbl"> Wait</span>
           </button>
           <button className={mode === 'demo' ? 'on' : ''} onClick={() => { setMode('demo'); setRunning(false); reset(); }}>
-            👂<span className="lbl"> Listen</span>
+            <Icon name="listen" /><span className="lbl"> Listen</span>
           </button>
         </div>
-        <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
-          <option value={0.5}>½×</option>
-          <option value={0.75}>¾×</option>
-          <option value={1}>1×</option>
-        </select>
         <div className="score">
-          🎯 {st.hits}/{total}
+          <Icon name="check" size={16} /> {st.hits}/{total}
         </div>
         <div className="opts-wrap">
           <button
@@ -273,19 +270,25 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
             onClick={() => setShowOpts((o) => !o)}
             aria-expanded={showOpts}
           >
-            ⚙️<span className="lbl"> Options</span>
+            <Icon name="settings" /><span className="lbl"> Options</span>
           </button>
           {showOpts && (
             <>
               <div className="opts-scrim" onClick={() => setShowOpts(false)} />
               <div className="opts-pop" role="dialog" aria-label="Song options">
                 <div className="opt-row">
-                  <span>Sound for 👂 Listen</span>
-                  <VoiceSelect />
+                  <span>Speed</span>
+                  <div className="seg">
+                    {[0.5, 0.75, 1].map((v) => (
+                      <button key={v} className={speed === v ? 'on' : ''} onClick={() => setSpeed(v)}>
+                        {v === 0.5 ? '½×' : v === 0.75 ? '¾×' : '1×'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="opt-row">
-                  <span>Mic boost</span>
-                  <MicBoostSelect bare />
+                  <span>Sound for Listen</span>
+                  <VoiceSelect />
                 </div>
                 <div className="opt-row">
                   <span>Tune my violin</span>
@@ -297,7 +300,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
                       setTuning(true);
                     }}
                   >
-                    🎚️ Tuner
+                    <Icon name="tuner" size={18} /> Tuner
                   </button>
                 </div>
               </div>
@@ -329,11 +332,12 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
             {!running && !done && (
               <div className="overlay-center">
                 {mode !== 'demo' && st.songBeat <= -3 && (
-                  <p className="muted small">🎤 I'll ask to use the microphone so I can hear your violin.</p>
+                  <p className="muted small">I'll ask to use the microphone so I can hear your violin.</p>
                 )}
                 {micErr && mode !== 'demo' && <div className="toast warn">{micErr}</div>}
                 <button className="btn big primary" onClick={start}>
-                  {st.songBeat > -3 ? '▶ Keep going' : mode === 'demo' ? '👂 Listen to it' : '🎤 Start: turn on the mic'}
+                  <Icon name={mode === 'demo' ? 'listen' : st.songBeat > -3 ? 'play' : 'sounds'} size={22} />{' '}
+                  {st.songBeat > -3 ? 'Keep going' : mode === 'demo' ? 'Listen to it' : 'Start: turn on the mic'}
                 </button>
                 <p className="muted small">
                   {mode === 'wait' ? 'Each note waits until I hear it. Watch the finger AND the bow!' : 'Hear how it goes first.'}
@@ -359,8 +363,8 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
               </div>
             )}
             {running && (
-              <button className="btn small pause" onClick={() => setRunning(false)}>
-                ⏸
+              <button className="btn small pause" onClick={() => setRunning(false)} aria-label="Pause">
+                <Icon name="pause" />
               </button>
             )}
           </div>

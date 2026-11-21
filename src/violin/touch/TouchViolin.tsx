@@ -11,7 +11,8 @@ import { SongPicker } from "../../ui/SongPicker";
 import { useAnimationCanvas } from "../../ui/useAnimationCanvas";
 import { STRINGS, VIOLIN_SONGS, violinNotes } from "../theory";
 import type { VNoteState } from "../violinHighway";
-import { RotateTip } from "./RotateTip";
+import { RotateTip, isPhone } from "./RotateTip";
+import { Icon } from "../../ui/Icon";
 import { loadViolin, sendStrings, silence, unlockAudio } from "./engine";
 import { MiniViolin } from "../MiniViolin";
 import {
@@ -34,7 +35,8 @@ import {
 import { previewVoice } from "./engine";
 
 /** The "Touch violin" screen: free play or a song, played on the iPad held like a violin. */
-export function TouchViolinTab() {
+export function TouchViolinTab({ header }: { header?: React.ReactNode }) {
+  const [tipOpen, setTipOpen] = useState(false);
   const [song, setSong] = useState<Song | null | "free">(null);
   useEffect(() => {
     loadViolin();
@@ -52,12 +54,16 @@ export function TouchViolinTab() {
       onPick={setSong}
       intro={
         <>
-          <p className="muted">
-            No violin needed, great for the car, and the best place to start. Hold the iPad like a violin (tap ? on
-            the play screen for a picture): your left fingers curl over the edge onto the strings, your other pinky
-            bows in the bow area. Each string has its own coloured track, and the number on a note is the finger to
-            use. When you're comfortable, try the same songs on a real violin in Real violin.
-          </p>
+          {header}
+          <div className="banner">
+            <span>Hold the {isPhone() ? "phone" : "iPad"} sideways like a violin</span>
+            <button className="btn small ghost" onClick={() => setTipOpen(true)}>
+              <Icon name="help" size={16} /> How
+            </button>
+          </div>
+          {tipOpen && (
+            <RotateTip portrait={matchMedia("(orientation: portrait)").matches} onDone={() => setTipOpen(false)} />
+          )}
           <div className="song-grid">
             <button className="song-card" onClick={() => setSong("free")}>
               <span className="song-emoji">🎻</span>
@@ -161,6 +167,58 @@ function loadOpts(): StoredOpts {
   } catch {
     return def;
   }
+}
+
+/** Touch violin set-up for the violin Settings tab (how you hold it, its size). */
+export function TouchViolinSettings() {
+  const [opts, setOpts] = useState<StoredOpts>(loadOpts);
+  const set = (o: Partial<StoredOpts>) =>
+    setOpts((cur) => {
+      const next = { ...cur, ...o };
+      try {
+        localStorage.setItem(OPTS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  const dev = isPhone() ? "phone" : "iPad";
+  return (
+    <div className="panel slim settings-list">
+      <b>Touch violin</b>
+      <Toggle
+        label="Left-handed (neck on the right)"
+        hint="Bow with your left hand"
+        on={opts.neckRight}
+        set={(v) => set({ neckRight: v })}
+      />
+      <Toggle
+        label="Neck along the top edge"
+        hint={`Fingers curl over the top of the ${dev}. Off: bottom edge`}
+        on={opts.neckTop}
+        set={(v) => set({ neckTop: v })}
+      />
+      <div className="opt-row">
+        <span>
+          Violin size
+          <span className="muted small tv-hint">Smaller violins have closer fingers, for smaller hands</span>
+        </span>
+        <div className="seg">
+          {VIOLIN_SIZES.map(([name]) => (
+            <button key={name} className={opts.size === name ? "on" : ""} onClick={() => set({ size: name })}>
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Toggle
+        label="Wider strings"
+        hint="Strings further apart, for bigger fingertips"
+        on={opts.big}
+        set={(v) => set({ big: v })}
+      />
+    </div>
+  );
 }
 
 type Mode = "wait" | "demo";
@@ -569,10 +627,10 @@ function TouchViolinPlay({
   const bar = (
         <div className="game-bar">
           <button className="btn small ghost back" onClick={onExit} aria-label="Songs">
-            ◀<span className="lbl"> Songs</span>
+            <Icon name="back" /><span className="lbl"> Songs</span>
           </button>
           <div className="game-title" hidden={angled}>
-            {song ? `${song.emoji} ${song.title}` : "🎻 Free play"}
+            {song ? `${song.emoji} ${song.title}` : "Free play"}
           </div>
           <div className="bar-feedback">
             {feedback && !done ? (
@@ -599,7 +657,7 @@ function TouchViolinPlay({
                     reset();
                   }}
                 >
-                  🐢<span className="lbl"> Play</span>
+                  <Icon name="wait" /><span className="lbl"> Wait</span>
                 </button>
                 <button
                   className={mode === "demo" ? "on" : ""}
@@ -609,11 +667,11 @@ function TouchViolinPlay({
                     reset();
                   }}
                 >
-                  👂<span className="lbl"> Listen</span>
+                  <Icon name="listen" /><span className="lbl"> Listen</span>
                 </button>
               </div>
               <div className="score">
-                🎯 {st.hits}/{total}
+                <Icon name="check" size={16} /> {st.hits}/{total}
               </div>
             </>
           )}
@@ -624,7 +682,7 @@ function TouchViolinPlay({
               aria-expanded={showOpts}
             aria-label="Options"
             >
-              ⚙️<span className="lbl"> Options</span>
+              <Icon name="settings" /><span className="lbl"> Options</span>
             </button>
             {showOpts && (
               <>
@@ -720,45 +778,6 @@ function TouchViolinPlay({
                       on={opts.names}
                       set={(v) => setOpt("names", v)}
                     />
-                    <Toggle
-                      label="Left-handed (neck on the right)"
-                      hint="Bow with your left hand, like a left-handed violin"
-                      on={opts.neckRight}
-                      set={(v) => setOpt("neckRight", v)}
-                    />
-                    <Toggle
-                      label="Neck along the top edge"
-                      hint="Fingers curl over the top of the iPad. Off: bottom edge"
-                      on={opts.neckTop}
-                      set={(v) => setOpt("neckTop", v)}
-                    />
-                    <div className="opt-row">
-                      <span>
-                        Violin size
-                        <span className="muted small tv-hint">
-                          Smaller violins have closer fingers, for smaller hands
-                        </span>
-                      </span>
-                      <div className="seg">
-                        {VIOLIN_SIZES.map(([name]) => (
-                          <button
-                            key={name}
-                            className={opts.size === name ? "on" : ""}
-                            onClick={() =>
-                              setOpts((o) => ({ ...o, size: name }))
-                            }
-                          >
-                            {name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <Toggle
-                      label="Wider strings"
-                      hint="Strings further apart, for bigger fingertips"
-                      on={opts.big}
-                      set={(v) => setOpt("big", v)}
-                    />
                     <button
                       className="btn small primary tv-opts-done"
                       onClick={() => setShowOpts(false)}
@@ -777,7 +796,7 @@ function TouchViolinPlay({
                 setOpts((o) => ({ ...o, turn: o.turn === "cw" ? "ccw" : "cw" }))
               }
             >
-              ↻<span className="lbl"> Flip</span>
+              <Icon name="flip" /><span className="lbl"> Flip</span>
             </button>
           )}
           <button
@@ -785,7 +804,7 @@ function TouchViolinPlay({
             onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))}
             aria-label="How to hold it"
           >
-            ?
+            <Icon name="help" /><span className="lbl"> Help</span>
           </button>
           <FullscreenButton />
         </div>
@@ -811,6 +830,7 @@ function TouchViolinPlay({
             onLostPointerCapture={onUp}
             onContextMenu={(e) => e.preventDefault()}
           />
+          {song && !running && !done && <div className="tv-scrim" />}
           {song && (
             <div
               className="tv-over"
@@ -824,11 +844,12 @@ function TouchViolinPlay({
                 <div className="overlay-center">
                   <div className="tv-turn">
                     <button className="btn big primary" onClick={start}>
+                      <Icon name={mode === "demo" ? "listen" : "play"} size={22} />{" "}
                       {st.songBeat > -3
-                        ? "▶ Keep going"
+                        ? "Keep going"
                         : mode === "demo"
-                          ? "👂 Listen to it"
-                          : "▶ Start"}
+                          ? "Listen to it"
+                          : "Start"}
                     </button>
                     <p className="muted small">
                       {mode === "wait"
@@ -895,10 +916,10 @@ function TouchViolinPlay({
                     silence();
                   }}
                 >
-                  ⏸
+                  <Icon name="pause" />
                 </button>
               )}
-              {cur && mode === "wait" && running && (
+              {cur && mode === "wait" && running && opts.names && (
                 <div className="tv-now">
                   <b style={{ color: STRINGS[cur.fing.string].color }}>
                     {midiName(cur.midi)}

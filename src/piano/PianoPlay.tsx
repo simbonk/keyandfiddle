@@ -12,7 +12,7 @@ import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
 import { SoundSelect } from './SoundLab';
-import { MicBoostSelect } from '../ui/MicButton';
+import { Icon } from '../ui/Icon';
 import { PIANO_SONGS, tagHas } from './songs';
 
 type Mode = 'wait' | 'play' | 'demo';
@@ -25,26 +25,6 @@ export function loadInputMode(): InputMode {
   } catch {
     return 'tap';
   }
-}
-/** "Play by tapping / my piano" switch for Settings. */
-export function InputModeChoice() {
-  const [m, setM] = useState<InputMode>(loadInputMode);
-  return (
-    <div className="seg">
-      {(['tap', 'mic'] as InputMode[]).map((x) => (
-        <button
-          key={x}
-          className={m === x ? 'on' : ''}
-          onClick={() => {
-            saveInputMode(x);
-            setM(x);
-          }}
-        >
-          {x === 'tap' ? '👆 Tap the screen' : '🎤 Play my piano'}
-        </button>
-      ))}
-    </div>
-  );
 }
 export function saveInputMode(m: InputMode) {
   try {
@@ -60,6 +40,8 @@ interface Props {
   extraSongs?: Song[];
   initialSong?: Song | null;
   onRecord?: () => void;
+  /** shown above the song list (the Touch | Real switch) */
+  header?: React.ReactNode;
 }
 
 interface Hold {
@@ -71,7 +53,7 @@ interface Hold {
   reported: boolean;
 }
 
-export function PianoPlay({ cal, extraSongs = [], initialSong = null, onRecord }: Props) {
+export function PianoPlay({ cal, extraSongs = [], initialSong = null, onRecord, header }: Props) {
   const [song, setSong] = useState<Song | null>(initialSong);
   const songs = [...PIANO_SONGS, ...extraSongs];
   useEffect(() => {
@@ -84,9 +66,10 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null, onRecord }
         instrument="piano"
         onPick={setSong}
         onAddRecording={onRecord}
+        intro={header}
         badge={(s) => {
           const [a, b] = songRange(s, cal.startMidi);
-          return b - a > 24 ? `🎹 ${Math.round((b - a) / 12)} octaves` : null;
+          return b - a > 24 ? `${Math.round((b - a) / 12)} octaves` : null;
         }}
       />
     );
@@ -110,12 +93,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   });
   const [running, setRunning] = useState(false);
   const [showOpts, setShowOpts] = useState(false);
-  const [input, setInputState] = useState<InputMode>(loadInputMode);
-  const setInput = (m: InputMode) => {
-    setInputState(m);
-    saveInputMode(m);
-    if (m === 'tap') setHeard(null);
-  };
+  // chosen on the song list (Touch screen | My piano)
+  const [input] = useState<InputMode>(loadInputMode);
   const [done, setDone] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; tone: 'good' | 'warn' | 'info'; id: number } | null>(null);
   const [, force] = useState(0);
@@ -469,7 +448,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     <div className="game">
       <div className={`game-bar ${feedback ? 'has-fb' : ''}`}>
         <button className="btn small ghost back" onClick={onExit} aria-label="Back to songs">
-          ◀
+          <Icon name="back" />
         </button>
         <div className="game-title">
           {song.emoji} {song.title}
@@ -492,12 +471,13 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                 reset();
               }}
             >
-              {m === 'wait' ? '🐢 Wait' : m === 'play' ? '🏃 Play' : '👂 Listen'}
+              <Icon name={m === 'wait' ? 'wait' : m === 'play' ? 'run' : 'listen'} size={18} />
+              <span className="lbl">{m === 'wait' ? ' Wait' : m === 'play' ? ' Play' : ' Listen'}</span>
             </button>
           ))}
         </div>
         <div className="score">
-          ✅ {st.hits}/{total} {st.streak >= 3 && <span>🔥{st.streak}</span>}
+          <Icon name="check" size={16} /> {st.hits}/{total} {st.streak >= 3 && <span>🔥{st.streak}</span>}
         </div>
         <div className="opts-wrap">
           <button
@@ -505,7 +485,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
             onClick={() => setShowOpts((o) => !o)}
             aria-expanded={showOpts}
           >
-            ⚙️<span className="lbl"> Options</span>
+            <Icon name="settings" />
+            <span className="lbl"> Options</span>
           </button>
           {showOpts && (
             <>
@@ -524,17 +505,6 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                   </div>
                 )}
                 <div className="opt-row">
-                  <span>Play by</span>
-                  <div className="seg">
-                    <button className={input === 'tap' ? 'on' : ''} onClick={() => setInput('tap')}>
-                      👆 Tapping
-                    </button>
-                    <button className={input === 'mic' ? 'on' : ''} onClick={() => setInput('mic')}>
-                      🎤 My piano
-                    </button>
-                  </div>
-                </div>
-                <div className="opt-row">
                   <span>Finger numbers</span>
                   <button
                     className={`btn small ${showFingers ? 'primary' : 'ghost'}`}
@@ -548,7 +518,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                       }
                     }}
                   >
-                    🖐 {showFingers ? 'On' : 'Off'}
+                    {showFingers ? 'On' : 'Off'}
                   </button>
                 </div>
                 <div className="opt-row">
@@ -563,12 +533,6 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                   <span>Keyboard sound</span>
                   <SoundSelect />
                 </div>
-                {input === 'mic' && (
-                  <div className="opt-row">
-                    <span>Mic boost</span>
-                    <MicBoostSelect bare />
-                  </div>
-                )}
               </div>
             </>
           )}
@@ -596,19 +560,10 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         </div>
         {!running && !done && (
           <div className="overlay-center">
-            {mode !== 'demo' && (
-              <div className="seg input-seg">
-                <button className={input === 'tap' ? 'on' : ''} onClick={() => setInput('tap')}>
-                  👆 Tap the screen
-                </button>
-                <button className={input === 'mic' ? 'on' : ''} onClick={() => setInput('mic')}>
-                  🎤 Play my piano
-                </button>
-              </div>
-            )}
             {outOfRange && <p className="warn small">Some notes are outside your keyboard range and were skipped.</p>}
             <button className="btn big primary" onClick={startGame}>
-              {st.songBeat > -3 ? '▶ Keep going' : mode === 'demo' ? '👂 Listen to it' : '▶ Start'}
+              <Icon name={mode === 'demo' ? 'listen' : 'play'} size={22} />{' '}
+              {st.songBeat > -3 ? 'Keep going' : mode === 'demo' ? 'Listen to it' : 'Start'}
             </button>
             <p className="muted small">
               {mode === 'wait'
@@ -657,8 +612,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
           </div>
         )}
         {running && (
-          <button className="btn small pause" onClick={() => setRunning(false)}>
-            ⏸
+          <button className="btn small pause" onClick={() => setRunning(false)} aria-label="Pause">
+            <Icon name="pause" />
           </button>
         )}
       </div>

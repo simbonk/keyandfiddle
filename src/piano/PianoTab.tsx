@@ -2,7 +2,9 @@ import { TopBarSlot } from '../ui/chrome';
 import { useState } from 'react';
 import type { Song } from '../audio/notes';
 import { type PianoCalibration, isCalibrated, loadCalibration, saveCalibration } from './calibration';
-import { InputModeChoice, PianoPlay, loadInputMode } from './PianoPlay';
+import { type InputMode, PianoPlay, loadInputMode, saveInputMode } from './PianoPlay';
+import { Icon } from '../ui/Icon';
+import { PlayOn } from '../ui/PlayOn';
 import { type Recording, Recorder, loadRecs, recordingToSong } from './Recorder';
 import { TuneChart, TuningWizard } from './TuningWizard';
 import { MicBoostSelect } from '../ui/MicButton';
@@ -18,22 +20,40 @@ export function PianoTab() {
   const [skipped, setSkipped] = useState(false);
   const [learnSong, setLearnSong] = useState<Song | null>(null);
   const [recs, setRecs] = useState<Recording[]>(loadRecs);
+  const [input, setInputState] = useState<InputMode>(loadInputMode);
+  const setInput = (m: InputMode) => {
+    setInputState(m);
+    saveInputMode(m);
+  };
+  const header = (
+    <>
+      <PlayOn value={input === 'tap' ? 'touch' : 'real'} onChange={(v) => setInput(v === 'touch' ? 'tap' : 'mic')} real="My piano" />
+      {input === 'mic' && !isCalibrated(cal) && (
+        <div className="banner">
+          <span>Tune in to your piano first so I can hear it</span>
+          <button className="btn small primary" onClick={() => setView('settings')}>
+            Tune in
+          </button>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div className="tab-body">
       <TopBarSlot>
         <nav className="subnav">
           <button className={view === 'play' || view === 'record' ? 'on' : ''} onClick={() => setView('play')}>
-            <span className="ico">🎵</span>
-            <span className="nm"> Songs</span>
+            <Icon name="songs" className="ico" />
+            <span className="nm">Songs</span>
           </button>
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
-            <span className="ico">🎤</span>
-            <span className="nm"> Sounds</span>
+            <Icon name="sounds" className="ico" />
+            <span className="nm">Sounds</span>
           </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
-            <span className="ico">⚙️</span>
-            <span className="nm"> Settings</span>
+            <Icon name="settings" className="ico" />
+            <span className="nm">Settings</span>
           </button>
         </nav>
       </TopBarSlot>
@@ -41,10 +61,15 @@ export function PianoTab() {
       {view === 'sounds' && <SoundLab />}
       {view === 'settings' && (
         <>
-          <div className="panel slim settings-row">
-            <b>⚙️ Settings</b>
-            <InputModeChoice />
-            <MicBoostSelect />
+          <div className="panel slim settings-list">
+            <b>Microphone</b>
+            <div className="opt-row">
+              <span>
+                Mic boost
+                <span className="muted small tv-hint">Turn up if I can't hear a quiet piano</span>
+              </span>
+              <MicBoostSelect bare />
+            </div>
           </div>
           {isCalibrated(cal) && (
             <div className="panel slim">
@@ -73,20 +98,12 @@ export function PianoTab() {
       )}
       {view === 'play' && (
         <>
-          {!isCalibrated(cal) && loadInputMode() === 'mic' && (
-            <div className="hint">
-              Tip:{' '}
-              <button className="link" onClick={() => setView('settings')}>
-                tune in to your piano
-              </button>{' '}
-              (in ⚙️ Settings) first so I can hear it properly. You can also tap the keys on screen.
-            </div>
-          )}
           <PianoPlay
             cal={cal}
             extraSongs={recs.map(recordingToSong)}
             initialSong={learnSong}
             onRecord={() => setView('record')}
+            header={header}
           />
         </>
       )}

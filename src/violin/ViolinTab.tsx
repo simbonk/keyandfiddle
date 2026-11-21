@@ -1,50 +1,76 @@
 import { TopBarSlot } from '../ui/chrome';
+import { Icon } from '../ui/Icon';
 import { MicBoostSelect } from '../ui/MicButton';
+import { PlayOn } from '../ui/PlayOn';
 import { useState } from 'react';
 import { ViolinLessons } from './ViolinLesson';
 import { ViolinTuner } from './ViolinTuner';
-import { TouchViolinTab, ViolinSounds } from './touch/TouchViolin';
+import { TouchViolinSettings, TouchViolinTab, ViolinSounds } from './touch/TouchViolin';
 
-// The touch violin comes first (the default, friendliest for beginners), then
-// Songs on a real violin, Sounds and Settings.
-type View = 'songs' | 'sounds' | 'touch' | 'settings';
+// Same three tabs as the piano. Songs starts on the touch violin (friendliest
+// for beginners); a Touch | Real switch at the top moves to a real violin.
+type View = 'songs' | 'sounds' | 'settings';
+type On = 'touch' | 'real';
+const ON_KEY = 'kf.violin.on';
 
 export function ViolinTab() {
-  const [view, setView] = useState<View>('touch');
+  const [view, setView] = useState<View>('songs');
+  const [on, setOnState] = useState<On>(() => {
+    try {
+      return localStorage.getItem(ON_KEY) === 'real' ? 'real' : 'touch';
+    } catch {
+      return 'touch';
+    }
+  });
+  const setOn = (v: On) => {
+    setOnState(v);
+    try {
+      localStorage.setItem(ON_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
+  const header = <PlayOn value={on} onChange={setOn} real="My violin" />;
   return (
     <div className="tab-body">
       <TopBarSlot>
         <nav className="subnav">
-          <button className={view === 'touch' ? 'on' : ''} onClick={() => setView('touch')}>
-            <span className="ico">📱</span>
-            <span className="nm"> Touch violin</span>
-          </button>
           <button className={view === 'songs' ? 'on' : ''} onClick={() => setView('songs')}>
-            <span className="ico">🎻</span>
-            <span className="nm"> Real violin</span>
+            <Icon name="songs" className="ico" />
+            <span className="nm">Songs</span>
           </button>
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
-            <span className="ico">🎤</span>
-            <span className="nm"> Sounds</span>
+            <Icon name="sounds" className="ico" />
+            <span className="nm">Sounds</span>
           </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
-            <span className="ico">⚙️</span>
-            <span className="nm"> Settings</span>
+            <Icon name="settings" className="ico" />
+            <span className="nm">Settings</span>
           </button>
         </nav>
       </TopBarSlot>
-      {view === 'songs' && <ViolinLessons />}
+      {view === 'songs' && (on === 'touch' ? <TouchViolinTab header={header} /> : <ViolinLessons header={header} />)}
       {view === 'sounds' && <ViolinSounds />}
-      {view === 'touch' && <TouchViolinTab />}
       {view === 'settings' && (
-        <>
-          <div className="panel slim settings-row">
-            <b>⚙️ Settings</b>
-            <MicBoostSelect />
-            <span className="muted small">Tune your violin below before you play along with Songs.</span>
+        <div className="settings-page">
+          <div className="panel slim settings-list">
+            <b>Microphone</b>
+            <div className="opt-row">
+              <span>
+                Mic boost
+                <span className="muted small tv-hint">Turn up if I can't hear a quiet violin</span>
+              </span>
+              <MicBoostSelect bare />
+            </div>
           </div>
-          <ViolinTuner onDone={() => setView('songs')} />
-        </>
+          <TouchViolinSettings />
+          <ViolinTuner
+            onDone={() => {
+              setOn('real');
+              setView('songs');
+            }}
+          />
+        </div>
       )}
     </div>
   );

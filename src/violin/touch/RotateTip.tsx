@@ -226,7 +226,7 @@ function PhoneTip({ onDone }: { onDone: () => void }) {
           <li>
             <b>Turn the phone sideways and hold it with both hands.</b> Your left fingers reach over the top edge onto
             the strings, just like on a real violin, and your right thumb slides up and down in the bow area to bow.
-            Upside down? Tap <b>↻ Flip</b>. Words tilted? Set ⚙️ Options, Word angle to 0.
+            Upside down? Tap <b>Flip</b>. Words tilted? Set Options, Word angle to 0.
           </li>
         </ol>
         <button className="btn big primary" onClick={onDone}>
@@ -255,8 +255,8 @@ export function RotateTip({ portrait, onDone }: { portrait: boolean; onDone: () 
           </li>
           <li>
             <b>Hold it like a violin:</b> USB-C end away from you, tilted a little. Your left fingers curl over the edge
-            onto the strings, the bottom left corner rests against your chest, and your other pinky bows. The words turn to face you (change the angle in ⚙️ Options,
-            Word angle). Upside down? Tap <b>↻ Flip</b>.
+            onto the strings, the bottom left corner rests against your chest, and your other pinky bows. The words turn to face you (change the angle in Options,
+            Word angle). Upside down? Tap <b>Flip</b>.
           </li>
         </ol>
         {!portrait && (

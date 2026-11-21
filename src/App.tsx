@@ -1,12 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PianoTab } from './piano/PianoTab';
 import { ChromeContext, FullscreenButton } from './ui/chrome';
+import { Icon } from './ui/Icon';
 import { ViolinTab } from './violin/ViolinTab';
 
 type Tab = 'piano' | 'violin';
 const TABS: Tab[] = ['piano', 'violin'];
 
+const PHONE_Q = '(max-width: 600px) and (orientation: portrait)';
+function usePhonePortrait() {
+  const [on, setOn] = useState(() => typeof matchMedia === 'function' && matchMedia(PHONE_Q).matches);
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const m = matchMedia(PHONE_Q);
+    const f = () => setOn(m.matches);
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, []);
+  return on;
+}
+
 export function App() {
+  const phone = usePhonePortrait();
   const [tab, setTab] = useState<Tab>(() => {
     try {
       const t = localStorage.getItem('kf.tab') as Tab;
@@ -18,6 +33,8 @@ export function App() {
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const chrome = useMemo(() => ({ slot, setPlaying }), [slot]);
+  // the slot element changes when the phone turns; keep the ref current
+  useEffect(() => setSlot((s) => (s && !s.isConnected ? null : s)), [phone]);
 
   const pick = (t: Tab) => {
     setTab(t);
@@ -44,7 +61,8 @@ export function App() {
               className={tab === 'piano' ? 'on' : ''}
               onClick={() => pick('piano')}
             >
-              🎹<span className="lbl"> Piano</span>
+              <Icon name="piano" size={18} />
+              <span className="lbl">Piano</span>
             </button>
             <button
               role="tab"
@@ -52,13 +70,15 @@ export function App() {
               className={tab === 'violin' ? 'on' : ''}
               onClick={() => pick('violin')}
             >
-              🎻<span className="lbl"> Violin</span>
+              <Icon name="violin" size={18} />
+              <span className="lbl">Violin</span>
             </button>
           </nav>
-          <div className="subnav-slot" ref={setSlot} />
+          {!phone && <div className="subnav-slot" ref={setSlot} />}
           <FullscreenButton className="btn small ghost fs-top" />
         </header>
         <main className="main">{tab === 'piano' ? <PianoTab /> : <ViolinTab />}</main>
+        {phone && <nav className="tabbar" ref={setSlot} />}
       </div>
     </ChromeContext.Provider>
   );

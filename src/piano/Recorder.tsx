@@ -1,3 +1,4 @@
+import { Icon } from '../ui/Icon';
 import { useEffect, useRef, useState } from 'react';
 import { usePitchListener } from '../audio/hooks';
 import { getAudioContext, mic } from '../audio/mic';
@@ -257,7 +258,7 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
             />
             {!playing ? (
               <button className="btn primary" onClick={() => play(selected)}>
-                ▶ Play notes
+                <Icon name="play" size={16} /> Play notes
               </button>
             ) : (
               <button className="btn" onClick={stopPlayback}>
