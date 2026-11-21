@@ -54,7 +54,7 @@ export function RotateGraphic() {
       <path d="M248 58 l8 7 l-8 7" fill="none" stroke={MUTED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
       {/* 3. held like a violin: upright, USB-C toward the scroll, tilted a little.
-          Left fingers curl over the right edge onto the strings, the chin rests on
+          Left fingers curl over the right edge onto the strings, the bottom left corner rests on
           the bow end at the bottom, the other pinky bows in the bow area. */}
       <g transform="rotate(16 340 66)">
         <rect x={305} y={14} width={70} height={102} rx={10} fill="#0e0a24" stroke={INK} strokeWidth={2.5} />
@@ -72,37 +72,33 @@ export function RotateGraphic() {
         {/* a note sliding in toward the neck */}
         <path d="M318 76 L338 52" stroke={ACCENT} strokeWidth={7} strokeLinecap="round" />
         {/* left hand, as it really holds it: the hand wraps the right edge from
-            behind, the four fingers curl over onto the strings, the thumb stays
-            behind the iPad near the top */}
+            behind, the fingers curl over onto the strings, the thumb stays behind */}
         <g>
-          {/* thumb, hidden behind the iPad */}
-          <path d="M392 36 C384 30 368 24 352 26" stroke="#f2c9a0" strokeWidth={7} strokeLinecap="round" fill="none" opacity={0.35} />
-          <path d="M392 36 C384 30 368 24 352 26" stroke={INK} strokeWidth={1} strokeDasharray="2 2.5" fill="none" opacity={0.8} />
-          {/* side of the hand, outside the edge */}
-          <rect x={385} y={36} width={20} height={44} rx={10} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
-          {/* fingers: knuckle outside, then bent over the edge onto the strings */}
-          {[
-            [41, 7.6, 0],
-            [50.5, 8, 0],
-            [60, 7.6, 1],
-            [69, 6.6, 3],
-          ].map(([y, h, short]) => (
-            <g key={y}>
-              <rect x={373 + short} y={y - h / 2} width={22 - short} height={h} rx={h / 2} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
-              <rect x={359 + short} y={y - h / 2 + 0.6} width={17} height={h - 1.2} rx={(h - 1.2) / 2} fill="#f6d3ad" stroke="#a5704a" strokeWidth={1} />
-              <ellipse cx={362.5 + short} cy={y} rx={2.2} ry={h / 2 - 1.6} fill="#fbe3cc" />
-              <path d={`M${381 + short} ${y - h / 2 + 1.2} v${h - 2.4}`} stroke="#a5704a" strokeWidth={0.8} />
-            </g>
-          ))}
+          <path d="M392 36 C384 30 368 24 352 26" stroke="#f2c9a0" strokeWidth={7} strokeLinecap="round" fill="none" opacity={0.3} />
+          <path d="M392 36 C384 30 368 24 352 26" stroke={INK} strokeWidth={1} strokeDasharray="2 2.5" fill="none" opacity={0.7} />
+          <path
+            d="M402 34 C394 31 380 35.6 365 36 A4.5 4.5 0 0 0 365 45 L368 45.2 L364 45.2 A4.8 4.8 0 0 0 364 54.8 L367 55 L365.5 55 A4.5 4.5 0 0 0 365.5 64 L368.5 64 L367 64 A4 4 0 0 0 367 72 C375 73 382 76 386 86 L407 86 C410 70 410 45 402 34 Z"
+            fill="#f2c9a0"
+            stroke="#b07a52"
+            strokeWidth={1.3}
+            strokeLinejoin="round"
+          />
+          <path
+            d="M367 45.2 C373 45.4 378 46 382 47.5 M366 55 C372 55.2 377 56 381 57.5 M367.5 64 C373 64.3 377 65 380 66.5"
+            stroke="#b07a52"
+            strokeWidth={1}
+            fill="none"
+            strokeLinecap="round"
+          />
         </g>
         {/* bowing pinky */}
         <circle cx={330} cy={99} r={4.5} fill="#f2c9a0" stroke="#a5704a" strokeWidth={1} />
         <path d="M321 92 l-3 -4 l-3 4 M321 106 l-3 4 l-3 -4 M318 89 v20" stroke={INK} strokeWidth={1.3} fill="none" opacity={0.8} />
-        {/* chin on the bow end */}
-        <path d="M322 131 a18 14 0 0 1 36 0 z" fill="#f2c9a0" stroke={INK} strokeWidth={1.8} />
-        <path d="M333 126 q7 4 14 0" stroke="#5a3418" strokeWidth={1.8} fill="none" strokeLinecap="round" />
-        <text x={308} y={130} textAnchor="end" fill={MUTED} fontSize={9} fontWeight={800}>
-          chin
+        {/* the bottom left corner rests against your chest */}
+        <path d="M284 132 Q306 114 330 130" fill="none" stroke="#f2c9a0" strokeWidth={7} strokeLinecap="round" opacity={0.6} />
+        <circle cx={306} cy={116} r={5} fill="none" stroke={ACCENT} strokeWidth={2} />
+        <text x={281} y={130} textAnchor="end" fill={MUTED} fontSize={9} fontWeight={800}>
+          chest
         </text>
         <text x={302} y={102} textAnchor="end" fill={MUTED} fontSize={9} fontWeight={800}>
           bow
@@ -138,7 +134,7 @@ export function RotateTip({ portrait, onDone }: { portrait: boolean; onDone: () 
           </li>
           <li>
             <b>Hold it like a violin:</b> USB-C end away from you, tilted a little. Your left fingers curl over the edge
-            onto the strings, your chin rests on the bow end, and your other pinky bows. The words turn to face you (change the angle in ⚙️ Options,
+            onto the strings, the bottom left corner rests against your chest, and your other pinky bows. The words turn to face you (change the angle in ⚙️ Options,
             Word angle). Upside down? Tap <b>↻ Flip</b>.
           </li>
         </ol>
