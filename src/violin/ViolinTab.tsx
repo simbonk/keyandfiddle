@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { ViolinCoach } from './ViolinCoach';
 import { ViolinLessons } from './ViolinLesson';
 import { ViolinTuner } from './ViolinTuner';
+import { TouchViolinTab } from './touch/TouchViolin';
 
-type View = 'tune' | 'mirror' | 'lessons';
+type View = 'tune' | 'mirror' | 'lessons' | 'touch';
 
 export function ViolinTab() {
   const [view, setView] = useState<View>('tune');
@@ -21,11 +22,15 @@ export function ViolinTab() {
         <button className={view === 'lessons' ? 'on' : ''} onClick={() => setView('lessons')}>
           🎮 3. Play tunes
         </button>
+        <button className={view === 'touch' ? 'on' : ''} onClick={() => setView('touch')}>
+          📱 Touch violin
+        </button>
       </nav>
       </TopBarSlot>
       {view === 'tune' && <ViolinTuner onDone={() => setView('mirror')} />}
       {view === 'mirror' && <ViolinCoach />}
       {view === 'lessons' && <ViolinLessons />}
+      {view === 'touch' && <TouchViolinTab />}
     </div>
   );
 }
