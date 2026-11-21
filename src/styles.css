@@ -28,6 +28,9 @@
 }
 html.vp-short {
   --safe-b: 0px;
+  /* iOS paints the strip below the app's window with the page colour: make it
+     the bottom bar's colour so the bar seems to run to the bottom edge */
+  background: #0c0820;
 }
 html,
 body,
@@ -2380,7 +2383,7 @@ select option {
   align-items: flex-start;
   padding: 8px 6px var(--safe-b);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 8, 32, 0.96);
+  background: #0c0820;
 }
 .touch-violin.tv-bottombar.flipped {
   transform: rotate(180deg);
@@ -2447,9 +2450,7 @@ select option {
   padding: 8px 6px calc(var(--safe-b) + 10px);
   margin-bottom: calc(-1 * var(--safe-b));
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 8, 32, 0.92);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0c0820;
 }
 .app.playing > .tabbar {
   display: none;
