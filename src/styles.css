@@ -2114,7 +2114,3 @@ select option {
   transform: translateY(150px) rotate(var(--tv-read));
 }
 
-.song-card.static {
-  cursor: default;
-  opacity: 0.85;
-}

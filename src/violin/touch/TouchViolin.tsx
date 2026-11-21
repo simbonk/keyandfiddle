@@ -35,17 +35,9 @@ import { previewVoice } from "./engine";
 /** The "Touch violin" screen: free play or a song, played on the iPad held like a violin. */
 export function TouchViolinTab() {
   const [song, setSong] = useState<Song | null | "free">(null);
-  const voice = useViolinVoice();
-  const mine = useMySounds();
   useEffect(() => {
     loadViolin();
   }, []);
-  const vInfo =
-    VIOLIN_VOICES.find((v) => v.id === voice) ??
-    (() => {
-      const m = mine.find((x) => `mine:${x.id}` === voice);
-      return m ? { emoji: m.emoji, name: m.name } : VIOLIN_VOICES[0];
-    })();
   if (song === "free")
     return <TouchViolinPlay song={null} onExit={() => setSong(null)} />;
   if (song)
@@ -76,13 +68,6 @@ export function TouchViolinTab() {
                 Just play! Every note on the four strings.
               </span>
             </button>
-            <div className="song-card static">
-              <span className="song-emoji">{vInfo.emoji}</span>
-              <b>Sound: {vInfo.name}</b>
-              <span className="muted small">
-                Change it in 🎤 Sounds at the top.
-              </span>
-            </div>
           </div>
         </>
       }
