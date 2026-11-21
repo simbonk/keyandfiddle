@@ -179,6 +179,26 @@ export const VIOLIN_SONGS: Song[] = [
       A4:1 A4:1 E5:1 E5:1 | F#5:1 F#5:1 E5:2 | D5:1 D5:1 C#5:1 C#5:1 | B4:1 B4:1 A4:2`),
   },
   {
+    id: 'saints-v',
+    title: 'When the Saints Go Marching In',
+    emoji: '🎺',
+    bpm: 100,
+    level: 2,
+    blurb: 'Traditional. On the D string with one open A.',
+    notes: parseSong(`D4:1 F#4:1 G4:1 A4:4 | R:1 D4:1 F#4:1 G4:1 A4:4 | R:1 D4:1 F#4:1 G4:1 A4:2 F#4:2 | D4:2 F#4:2 E4:4 |
+      R:1 F#4:1 F#4:1 E4:1 D4:3 D4:1 | F#4:2 A4:2 A4:1 G4:3 | R:1 F#4:1 G4:1 A4:2 F#4:2 | D4:2 E4:2 D4:4`),
+  },
+  {
+    id: 'amazing-grace-v',
+    title: 'Amazing Grace',
+    emoji: '🕊️',
+    bpm: 80,
+    level: 2,
+    blurb: 'Traditional hymn, slow and singing. Long bows!',
+    notes: parseSong(`D4:1 | G4:2 B4:0.5 G4:0.5 | B4:2 A4:1 | G4:2 E4:1 | D4:2 D4:1 | G4:2 B4:0.5 G4:0.5 | B4:2 A4:1 | D5:3 |
+      D5:2 B4:1 | D5:1.5 B4:0.5 G4:1 | B4:2 A4:1 | G4:2 E4:1 | D4:2 D4:1 | G4:2 B4:0.5 G4:0.5 | B4:2 A4:1 | G4:3`),
+  },
+  {
     id: 'lightly-row',
     title: 'Lightly Row',
     emoji: '🚣',

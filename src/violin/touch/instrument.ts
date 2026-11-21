@@ -1,17 +1,33 @@
 // The touch violin's playing surface: layout, multi-touch input and drawing.
 //
-// The iPad is held like a violin with the scroll on the left. The left hand
-// stops the strings on the neck (E on top, G at the bottom, like a violin
-// turned on its side), and the right hand drags across the bow zone: pull
-// right for a down bow, push left for an up bow. Where the bow hand is in the
-// zone is which part of the bow touches the string (frog on the left, tip on
-// the right), so it lines up with the bow track of the song highway.
+// The iPad is held like a violin with the scroll on the left. The neck and
+// the bow zone are drawn at real violin size along the top edge (or the bottom
+// one), G string nearest the edge: the fingers curl over the edge onto the
+// strings like they come over the G side of a violin. Finger spacing
+// is what your hand will meet on a real violin. The left hand stops the
+// strings on the neck and the right hand drags along the bow zone: pull right
+// for a down bow, push left for an up bow. Where the bow hand is in the zone
+// is which part of the bow touches the string (frog on the left, tip on the
+// right). Songs come up from below (or down from above) straight onto the spot to press and the
+// stretch of bow to use, like the piano's falling notes.
 
 import { midiName, midiToFreq } from '../../audio/notes';
 import { FINGER_COLORS, STRINGS, stopFraction, type BowDir, type BowStroke } from '../theory';
+import type { VNoteState } from '../violinHighway';
 import type { StringMsg } from './violinProcessor';
 
 export const MAX_SEMIS = 8.4;
+/** Vibrating string length of a full-size violin, nut to bridge. */
+const SCALE_MM = 328;
+
+/** Child violin sizes: name and string length relative to a full-size (4/4) violin. */
+export const VIOLIN_SIZES: [string, number][] = [
+  ['4/4', 1],
+  ['3/4', 307 / 328],
+  ['1/2', 287 / 328],
+  ['1/4', 266 / 328],
+  ['1/8', 240 / 328],
+];
 
 export interface Rect {
   x: number;
@@ -23,36 +39,123 @@ export interface Rect {
 export interface Layout {
   w: number;
   h: number;
-  neck: Rect;
-  pad: Rect;
+  /** CSS pixels per millimetre (after any squeeze to fit a small screen) */
+  mm: number;
+  x0: number;
   nutX: number;
   fbEnd: number;
-  laneH: number;
-  laneY: (s: number) => number;
+  /** touches left of this are the left hand, right of it the bow */
+  split: number;
+  pad: Rect;
+  /** centre line of the strings */
+  yc: number;
+  /** neck along the top edge (music below) or the bottom edge (music above) */
+  top: boolean;
+  /** direction from the landing line into the music area: +1 down, -1 up */
+  d: 1 | -1;
+  /** far end of the music area */
+  far: number;
+  /** half the neck's width at its widest, for touch filtering and labels */
+  neckHalf: number;
+  /** where falling notes land */
+  strikeY: number;
+  openX: number;
+  stringY: (s: number, x: number) => number;
   semisX: (semis: number) => number;
   xToSemis: (x: number) => number;
-  yToString: (y: number) => number;
+  neckString: (x: number, y: number) => number;
+  padString: (y: number) => number;
+  spacing: (x: number) => number;
 }
 
-/** Same split as the song highway (left 56% strings, right 44% bow), so the tracks sit over the instrument. */
-export function violinLayout(w: number, h: number): Layout {
-  const gap = Math.max(14, w * 0.04);
-  const neck = { x: 8, y: 6, w: (w - gap - 16) * 0.56, h: h - 12 };
-  const pad = { x: neck.x + neck.w + gap, y: 6, w: (w - gap - 16) * 0.44, h: h - 12 };
-  const scrollW = Math.min(76, Math.max(44, neck.w * 0.1));
-  const nutX = neck.x + scrollW;
-  const fbEnd = neck.x + neck.w - 2;
-  const laneH = neck.h / 4;
+/** CSS pixels per millimetre of the screen (best guess: browsers don't tell us the real size). */
+export function screenPxPerMm(): number {
+  if (typeof window === 'undefined') return 5.2;
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+  if (!coarse) return 96 / 25.4;
+  const short = Math.min(screen.width, screen.height);
+  if (short === 744) return 163 / 25.4; // iPad mini
+  if (short >= 700) return 132 / 25.4; // every other iPad, Air included
+  return 153 / 25.4; // phones
+}
+
+/**
+ * @param mm CSS px per mm of the screen
+ * @param big make the strings 1.5x further apart (easier for big fingers)
+ * @param top neck along the top edge
+ * @param size violin size as a fraction of full size (see VIOLIN_SIZES)
+ */
+export function violinLayout(w: number, h: number, mm: number, big = false, top = true, size = 1): Layout {
+  mm *= size;
+  let wm = (big ? 1.5 : 1) * mm; // across the strings
+  // short screens (a phone on its side): leave room above for the music
+  const want = 9.5 * 3 + 14;
+  if (want * wm > h * 0.42) wm = (h * 0.42) / want;
+  const scrollLen = 24;
+  const gapLen = 10;
+  const neckLen = SCALE_MM * stopFraction(MAX_SEMIS + 0.25);
+  const minPad = 60;
+  // lengths along the strings are real size if they fit, else squeezed
+  const k = Math.min(1, (w - 16) / ((scrollLen + neckLen + gapLen + minPad) * mm));
+  const lm = mm * k;
+  const x0 = 8;
+  const nutX = x0 + scrollLen * lm;
+  const semisX = (s: number) => nutX + SCALE_MM * stopFraction(Math.max(0, s)) * lm;
+  const fbEnd = semisX(MAX_SEMIS + 0.25);
+  const padX = fbEnd + gapLen * lm;
+  const pad = { x: padX, y: 0, w: w - 10 - padX, h: 0 };
+  // string spacing: 6 mm at the nut widening to 7.6 mm (real is 5.5 -> 7)
+  const spacing = (x: number) => {
+    if (x >= padX) return 9.5 * wm;
+    const t = Math.max(0, Math.min(1, (x - nutX) / (fbEnd - nutX)));
+    return (6 + 1.6 * t) * wm;
+  };
+  const padSp = 9.5 * wm;
+  pad.h = padSp * 3 + 14 * wm;
+  // keep clear of the iPad's home swipe at the bottom / status bar at the top
+  const yc = top ? 14 + pad.h / 2 : h - 22 - pad.h / 2;
+  const sg = top ? -1 : 1; // G string nearest the edge
+  pad.y = yc - pad.h / 2;
+  const stringY = (s: number, x: number) => {
+    if (x > fbEnd && x < padX) {
+      const t = (x - fbEnd) / (padX - fbEnd);
+      return yc + sg * (1.5 - s) * (spacing(fbEnd) * (1 - t) + padSp * t);
+    }
+    return yc + sg * (1.5 - s) * spacing(x);
+  };
   const full = stopFraction(MAX_SEMIS);
-  const semisX = (semis: number) => nutX + (stopFraction(Math.max(0, semis)) / full) * (fbEnd - nutX);
   const xToSemis = (x: number) => {
-    const frac = Math.max(0, Math.min(1, (x - nutX) / (fbEnd - nutX))) * full;
+    const frac = Math.max(0, Math.min(full, (x - nutX) / (SCALE_MM * lm)));
     return -12 * Math.log2(1 - frac);
   };
-  // E (index 3) on top, G (0) at the bottom
-  const laneY = (s: number) => neck.y + laneH * (3 - s + 0.5);
-  const yToString = (y: number) => Math.max(0, Math.min(3, 3 - Math.floor((y - neck.y) / laneH)));
-  return { w, h, neck, pad, nutX, fbEnd, laneH, laneY, semisX, xToSemis, yToString };
+  const nearest = (y: number, x: number) => {
+    let best = 0;
+    for (let s = 1; s < 4; s++) if (Math.abs(stringY(s, x) - y) < Math.abs(stringY(best, x) - y)) best = s;
+    return best;
+  };
+  return {
+    w,
+    h,
+    mm: lm,
+    x0,
+    nutX,
+    fbEnd,
+    split: (fbEnd + padX) / 2,
+    pad,
+    yc,
+    top,
+    d: top ? 1 : -1,
+    far: top ? h - 4 : 4,
+    neckHalf: 1.5 * spacing(fbEnd) + 5 * wm,
+    strikeY: top ? pad.y + pad.h + 8 : pad.y - 8,
+    openX: (x0 + nutX) / 2,
+    stringY,
+    semisX,
+    xToSemis,
+    neckString: (x, y) => nearest(y, Math.max(nutX, Math.min(fbEnd, x))),
+    padString: (y) => nearest(y, padX + 1),
+    spacing,
+  };
 }
 
 export interface ViolinOptions {
@@ -105,7 +208,7 @@ const UP = '#2ec4f1';
 export class TouchViolinState {
   fingers = new Map<number, Finger>();
   bow: Bow | null = null;
-  L: Layout = violinLayout(1000, 600);
+  L: Layout = violinLayout(1000, 600, 5.2);
   opts: ViolinOptions = { snap: true, easyBow: true, vibrato: true };
   /** strings the demo is playing (overrides touch) */
   sent: StrOut[] = STRINGS.map((s) => ({ freq: midiToFreq(s.midi), bowing: false, vel: 0, vib: 0 }));
@@ -118,8 +221,9 @@ export class TouchViolinState {
 
   down(id: number, x: number, y: number, t: number) {
     const L = this.L;
-    if (x < L.pad.x - 6) {
-      this.fingers.set(id, this.finger(x, y, t));
+    if (x < L.split) {
+      // ignore touches far above the neck (the music area)
+      if (Math.abs(y - L.yc) < L.neckHalf + 14 * L.mm) this.fingers.set(id, this.finger(x, y, t));
     } else if (!this.bow) {
       this.bow = { id, x, y, lastT: t, lastMove: t, speed: 0 };
       this.strokeId++;
@@ -144,7 +248,7 @@ export class TouchViolinState {
     b.y = y;
     b.lastT = t;
     if (Math.abs(inst) > 20) b.lastMove = t;
-    const dir: BowDir | null = Math.abs(b.speed) > this.L.pad.w * 0.04 ? (b.speed > 0 ? 'down' : 'up') : null;
+    const dir: BowDir | null = Math.abs(b.speed) > this.L.mm * 6 ? (b.speed > 0 ? 'down' : 'up') : null;
     if (dir && dir !== this.lastDir) {
       if (this.lastDir) this.strokeId++;
       this.lastDir = dir;
@@ -167,7 +271,7 @@ export class TouchViolinState {
 
   private finger(x: number, y: number, t: number): Finger {
     const L = this.L;
-    const s = L.yToString(y);
+    const s = L.neckString(x, y);
     let semis = Math.min(MAX_SEMIS, L.xToSemis(x));
     if (semis < 0.5) semis = 0; // on the scroll / at the nut: no note stopped
     return { s, semis, x, y, t };
@@ -189,7 +293,7 @@ export class TouchViolinState {
       for (const f of this.fingers.values()) if (f.semis > 0 && (!last || f.t > last.t)) last = f;
       if (last) return last.s;
     }
-    return this.L.yToString(this.bow.y);
+    return this.L.padString(this.bow.y);
   }
 
   /** What the player is sounding right now (null if the bow is still or off). */
@@ -198,7 +302,7 @@ export class TouchViolinState {
     const b = this.bow;
     if (s === null || !b) return null;
     const vel = this.sent[s].vel;
-    if (Math.abs(vel) < 0.02) return null;
+    if (Math.abs(vel) < 0.012) return null;
     return {
       string: s,
       midi: STRINGS[s].midi + this.stopped(s),
@@ -220,8 +324,8 @@ export class TouchViolinState {
       const freq = midiToFreq(STRINGS[s].midi + semis);
       let vel = 0;
       if (b && active === s) {
-        const sp = Math.abs(b.speed) / this.L.pad.w; // bow widths per second
-        vel = sp < 0.04 ? 0 : Math.sign(b.speed) * 0.25 * (1 - Math.exp(-sp * 0.9));
+        const sp = Math.abs(b.speed) / this.L.mm; // mm per second, so it feels the same on any screen
+        vel = sp < 4 ? 0 : Math.sign(b.speed) * 0.25 * (1 - Math.exp(-sp / 160));
       }
       const bowing = active === s;
       // a little vibrato once a stopped note has been held a moment
@@ -267,6 +371,14 @@ export class TouchViolinState {
   private sentVibString = -1;
 }
 
+export interface FallingView {
+  notes: VNoteState[];
+  songBeat: number;
+  visibleBeats: number;
+  current: VNoteState | null;
+  waiting: boolean;
+}
+
 export interface DrawTargets {
   /** the note to play now */
   target: { string: number; semis: number; finger: number; bow: BowStroke } | null;
@@ -274,9 +386,12 @@ export interface DrawTargets {
   ghost: { string: number; semis: number; bowPos: number; dir: BowDir } | null;
   /** bow progress through the target stroke (0..1) while the note is held */
   progress: number;
+  /** falling notes (songs) */
+  falling: FallingView | null;
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -292,6 +407,143 @@ const TAPES: [number, string][] = [
   [5, '3'],
   [7, '4'],
 ];
+const FONT = '"Baloo 2", system-ui';
+
+/** Width of the falling lane for a finger spot. */
+function gemWidth(L: Layout, semis: number) {
+  if (semis === 0) return Math.min(52, (L.nutX - L.x0) * 0.8);
+  return Math.max(24, Math.min(56, (L.semisX(semis + 0.5) - L.semisX(semis - 0.5)) * 0.92));
+}
+
+function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, now: number) {
+  const strike = L.strikeY;
+  const far = L.far;
+  const d = L.d;
+  const ppb = Math.abs(far - strike) / f.visibleBeats;
+  const yAt = (beatsAhead: number) => strike + d * beatsAhead * ppb;
+  const lo = Math.min(strike, far);
+  const span = Math.abs(far - strike);
+
+  // lane guides: open strings over the scroll, finger tapes, frog/middle/tip
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  roundRect(ctx, L.openX - gemWidth(L, 0) / 2, lo, gemWidth(L, 0), span, 10);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 2;
+  for (const [s] of TAPES) {
+    ctx.beginPath();
+    ctx.moveTo(L.semisX(s), far);
+    ctx.lineTo(L.semisX(s), strike);
+    ctx.stroke();
+  }
+  for (const t of [0, 0.5, 1]) {
+    const x = L.pad.x + t * L.pad.w;
+    ctx.beginPath();
+    ctx.moveTo(x, far);
+    ctx.lineTo(x, strike);
+    ctx.stroke();
+  }
+  // beat lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  for (let b = Math.ceil(f.songBeat); b < f.songBeat + f.visibleBeats; b++) {
+    const y = yAt(b - f.songBeat);
+    ctx.beginPath();
+    ctx.moveTo(L.x0, y);
+    ctx.lineTo(L.w - 8, y);
+    ctx.stroke();
+  }
+  // landing line
+  const pulse = f.waiting ? 0.55 + 0.4 * Math.sin(now / 150) : 0.55;
+  ctx.fillStyle = f.waiting ? `rgba(255,214,10,${pulse})` : 'rgba(255,255,255,0.5)';
+  ctx.fillRect(L.x0, strike - 2, L.fbEnd - L.x0, 4);
+  ctx.fillRect(L.pad.x, strike - 2, L.pad.w, 4);
+
+  const vis = f.notes.filter((n) => n.beat + n.beats > f.songBeat - 0.2 && n.beat < f.songBeat + f.visibleBeats);
+  for (const n of vis) {
+    const isCur = f.current === n;
+    let a = n.beat - f.songBeat;
+    if (n.state === 'hit') a = Math.max(0, a);
+    const b = n.beat + n.beats - f.songBeat - 0.06;
+    if (b <= a) continue;
+    const y0 = yAt(a);
+    const y1 = d > 0 ? Math.min(far, yAt(b)) : Math.max(far, yAt(b));
+    const gy = Math.min(y0, y1);
+    const gh = Math.abs(y0 - y1);
+    ctx.globalAlpha = n.state === 'hit' ? 0.3 : 1;
+
+    // ---- finger gem, falling onto its spot on the neck ----
+    const semis = n.fing.semis;
+    const x = semis === 0 ? L.openX : L.semisX(semis);
+    const gw = gemWidth(L, semis);
+    ctx.fillStyle = STRINGS[n.fing.string].color;
+    roundRect(ctx, x - gw / 2, gy, gw, gh, 10);
+    ctx.fill();
+    if (isCur) {
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#fff';
+      ctx.stroke();
+    }
+    // badge: finger number and string
+    const r = Math.min(gw * 0.42, 17);
+    const cy = y0 + d * (r + 4);
+    if (gh > r * 2 + 6 || n.state !== 'hit') {
+      ctx.beginPath();
+      ctx.arc(x, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = n.fing.finger === 0 ? '#10082a' : FINGER_COLORS[n.fing.finger];
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#fff';
+      ctx.stroke();
+      ctx.fillStyle = n.fing.finger === 0 ? '#fff' : '#10082a';
+      ctx.font = `800 ${Math.round(r * 1.2)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(n.fing.finger === 0 ? 'O' : String(n.fing.finger), x, cy + 1);
+      if (gh > r * 4 + 10) {
+        ctx.fillStyle = '#10082a';
+        ctx.font = `800 ${Math.round(r * 1.1)}px ${FONT}`;
+        ctx.fillText(STRINGS[n.fing.string].name, x, cy + d * (r * 2 + 2));
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // ---- bow gem, falling onto the stretch of bow to use ----
+    const bl = L.pad.x + Math.min(n.bow.from, n.bow.to) * L.pad.w;
+    const hi = L.pad.x + Math.max(n.bow.from, n.bow.to) * L.pad.w;
+    const down = n.bow.dir === 'down';
+    ctx.fillStyle = down ? DOWN : UP;
+    roundRect(ctx, bl, gy, hi - bl, gh, 10);
+    ctx.fill();
+    if (isCur) {
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#fff';
+      ctx.stroke();
+    }
+    // arrow showing which way to move
+    const ay = gh > 32 ? y0 + d * 16 : gy + gh / 2;
+    const dir = down ? 1 : -1;
+    const ax0 = down ? bl + 12 : hi - 12;
+    const ax1 = down ? hi - 12 : bl + 12;
+    ctx.strokeStyle = '#10082a';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ax0, ay);
+    ctx.lineTo(ax1, ay);
+    ctx.moveTo(ax1, ay);
+    ctx.lineTo(ax1 - dir * 10, ay - 8);
+    ctx.moveTo(ax1, ay);
+    ctx.lineTo(ax1 - dir * 10, ay + 8);
+    ctx.stroke();
+    if (gh > 44 && hi - bl > 60) {
+      ctx.fillStyle = '#10082a';
+      ctx.font = `800 15px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(down ? '⊓ pull' : 'V push', (bl + hi) / 2, ay + d * 22 + 5);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
 
 export function drawTouchViolin(
   ctx: CanvasRenderingContext2D,
@@ -301,216 +553,165 @@ export function drawTouchViolin(
   now: number,
 ) {
   const L = st.L;
-  const { neck, pad } = L;
+  const { pad } = L;
   ctx.clearRect(0, 0, L.w, L.h);
-  const small = L.laneH < 70;
+  if (t.falling) drawFalling(ctx, L, t.falling, now);
+
+  const sp0 = L.spacing(L.nutX);
+  const sp1 = L.spacing(L.fbEnd);
+  const half0 = 1.5 * sp0 + sp0 * 0.6;
+  const half1 = 1.5 * sp1 + sp1 * 0.7;
+
+  // ---- violin body behind the bow zone ----
+  const bodyTop = L.top ? pad.y - pad.h * 0.5 : pad.y - pad.h * 0.25;
+  const bodyH = pad.h * 1.5;
+  const bg = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyH);
+  bg.addColorStop(0, '#6e3510');
+  bg.addColorStop(0.5, '#9a5018');
+  bg.addColorStop(1, '#6e3510');
+  ctx.fillStyle = bg;
+  roundRect(ctx, pad.x - 10, bodyTop, L.w - pad.x + 4, bodyH, 28);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(30,10,0,0.5)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // bridge
+  const brX = pad.x + pad.w + 2;
+  ctx.fillStyle = '#ecd7ae';
+  roundRect(ctx, brX - 4, pad.y + 2, 8, pad.h - 4, 3);
+  ctx.fill();
 
   // ---- scroll and pegbox ----
-  const sg = ctx.createLinearGradient(neck.x, 0, L.nutX, 0);
+  const sg = ctx.createLinearGradient(L.x0, 0, L.nutX, 0);
   sg.addColorStop(0, '#5a2d0c');
   sg.addColorStop(1, '#8a4a1c');
   ctx.fillStyle = sg;
-  roundRect(ctx, neck.x, neck.y + neck.h * 0.06, L.nutX - neck.x, neck.h * 0.88, 18);
+  roundRect(ctx, L.x0, L.yc - half0 - 4, L.nutX - L.x0, (half0 + 4) * 2, 12);
   ctx.fill();
-  // ---- fingerboard ----
-  const fg = ctx.createLinearGradient(0, neck.y, 0, neck.y + neck.h);
-  fg.addColorStop(0, '#26221f');
-  fg.addColorStop(0.5, '#141210');
-  fg.addColorStop(1, '#26221f');
-  ctx.fillStyle = fg;
-  roundRect(ctx, L.nutX, neck.y, L.fbEnd - L.nutX, neck.h, 10);
+
+  // ---- fingerboard (tapers wider toward the body) ----
+  ctx.fillStyle = '#17140f';
+  ctx.beginPath();
+  ctx.moveTo(L.nutX, L.yc - half0);
+  ctx.lineTo(L.fbEnd + 6, L.yc - half1);
+  ctx.lineTo(L.fbEnd + 6, L.yc + half1);
+  ctx.lineTo(L.nutX, L.yc + half0);
+  ctx.closePath();
   ctx.fill();
-  // nut
   ctx.fillStyle = '#f2e3c4';
-  ctx.fillRect(L.nutX - 5, neck.y, 6, neck.h);
+  ctx.fillRect(L.nutX - 4, L.yc - half0, 5, half0 * 2);
 
-  // ---- bow zone: the violin's belly up to the bridge ----
-  const bg = ctx.createLinearGradient(pad.x, 0, pad.x + pad.w, 0);
-  bg.addColorStop(0, '#6e3510');
-  bg.addColorStop(0.5, '#8f4a17');
-  bg.addColorStop(1, '#743a12');
-  ctx.fillStyle = bg;
-  roundRect(ctx, pad.x, pad.y, pad.w, pad.h, 22);
-  ctx.fill();
-  // wood grain
-  ctx.strokeStyle = 'rgba(60,20,0,0.12)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 14; i++) {
-    const y = pad.y + (pad.h * i) / 14 + Math.sin(i * 7.1) * 4;
-    ctx.beginPath();
-    ctx.moveTo(pad.x + 10, y);
-    ctx.bezierCurveTo(pad.x + pad.w * 0.3, y + 6, pad.x + pad.w * 0.7, y - 6, pad.x + pad.w - 10, y);
-    ctx.stroke();
-  }
-  // bridge
-  const brX = pad.x + pad.w - 16;
-  ctx.fillStyle = '#ecd7ae';
-  roundRect(ctx, brX, pad.y + pad.h * 0.04, 9, pad.h * 0.92, 4);
-  ctx.fill();
-  ctx.font = `700 ${small ? 11 : 13}px "Baloo 2", system-ui`;
-  ctx.fillStyle = 'rgba(255,240,220,0.8)';
-  ctx.textAlign = 'left';
-  ctx.fillText('frog', pad.x + 10, pad.y + pad.h - 8);
-  ctx.textAlign = 'right';
-  ctx.fillText('tip', brX - 6, pad.y + pad.h - 8);
-
-  // ---- open string / bow target in the bow zone ----
-  const tgt = t.target;
-  if (tgt) {
-    const y = L.laneY(tgt.string);
-    const lo = pad.x + Math.min(tgt.bow.from, tgt.bow.to) * pad.w;
-    const hi = pad.x + Math.max(tgt.bow.from, tgt.bow.to) * pad.w;
-    const col = tgt.bow.dir === 'down' ? DOWN : UP;
-    const pulse = 0.6 + 0.2 * Math.sin(now / 180);
-    roundRect(ctx, lo, y - L.laneH * 0.36, hi - lo, L.laneH * 0.72, 14);
-    ctx.globalAlpha = pulse;
-    ctx.fillStyle = col;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#fff';
-    ctx.stroke();
-    // arrow along the stroke
-    const dir = tgt.bow.dir === 'down' ? 1 : -1;
-    const ax0 = dir > 0 ? lo + 14 : hi - 14;
-    const ax1 = dir > 0 ? hi - 14 : lo + 14;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = small ? 3 : 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(ax0, y);
-    ctx.lineTo(ax1, y);
-    ctx.moveTo(ax1, y);
-    ctx.lineTo(ax1 - dir * 14, y - 12);
-    ctx.moveTo(ax1, y);
-    ctx.lineTo(ax1 - dir * 14, y + 12);
-    ctx.stroke();
-    if (t.progress > 0) {
-      const px = pad.x + (tgt.bow.from + (tgt.bow.to - tgt.bow.from) * t.progress) * pad.w;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(px, y, 8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.font = `800 ${small ? 13 : 17}px "Baloo 2", system-ui`;
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.fillText(tgt.bow.dir === 'down' ? '⊓ pull →' : '← push V', (lo + hi) / 2, y - L.laneH * 0.36 - 4);
-  }
-
-  // ---- tapes and note names on the fingerboard ----
+  // tapes
   for (const [semis, label] of TAPES) {
     const x = L.semisX(semis);
-    ctx.fillStyle = 'rgba(242,227,196,0.55)';
-    ctx.fillRect(x - 2, neck.y + 4, 4, neck.h - 8);
-    ctx.fillStyle = 'rgba(242,227,196,0.9)';
-    ctx.font = `800 ${small ? 11 : 14}px "Baloo 2", system-ui`;
-    ctx.textAlign = 'center';
-    ctx.fillText(label, x, neck.y + (small ? 13 : 17));
+    const hh = 1.5 * L.spacing(x) + L.spacing(x) * 0.6;
+    ctx.fillStyle = 'rgba(242,227,196,0.6)';
+    ctx.fillRect(x - 1.5, L.yc - hh, 3, hh * 2);
+    if (!t.falling) {
+      ctx.fillStyle = 'rgba(242,227,196,0.9)';
+      ctx.font = `800 13px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x, L.top ? L.yc + hh + 14 : L.yc - hh - 5);
+    }
   }
 
   // ---- strings ----
   const sounding = st.sounding();
   for (let s = 0; s < 4; s++) {
-    const y = L.laneY(s);
-    const thick = 4.2 - s * 0.8;
     const ringing = sounding?.string === s;
     const amp = ringing ? Math.min(1, Math.abs(sounding!.vel) / 0.18) : 0;
-    const stopX = st.stopped(s) > 0 ? L.semisX(st.stopped(s)) : L.nutX;
-    // fingerboard part, nut to bridge (the bow zone continues it)
+    const thick = 2.6 - s * 0.45;
     ctx.strokeStyle = STRINGS[s].color;
-    ctx.globalAlpha = ringing ? 1 : 0.75;
+    ctx.globalAlpha = ringing ? 1 : 0.8;
     ctx.lineWidth = thick;
     ctx.beginPath();
-    ctx.moveTo(L.nutX - 4, y);
-    ctx.lineTo(L.fbEnd, y);
+    ctx.moveTo(L.nutX - 4, L.stringY(s, L.nutX));
+    ctx.lineTo(L.fbEnd, L.stringY(s, L.fbEnd));
+    ctx.lineTo(pad.x, L.stringY(s, pad.x));
+    ctx.lineTo(brX, L.stringY(s, pad.x));
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(pad.x, y);
-    ctx.lineTo(brX + 4, y);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
     if (amp > 0) {
-      // vibrating blur between the finger and the bridge
+      const stopX = st.stopped(s) > 0 ? L.semisX(st.stopped(s)) : L.nutX;
       ctx.globalAlpha = 0.35;
-      ctx.lineWidth = thick + amp * 12;
+      ctx.lineWidth = thick + amp * 7;
       ctx.beginPath();
-      ctx.moveTo(stopX, y);
-      ctx.lineTo(L.fbEnd, y);
-      ctx.moveTo(pad.x, y);
-      ctx.lineTo(brX, y);
+      ctx.moveTo(stopX, L.stringY(s, stopX));
+      ctx.lineTo(L.fbEnd, L.stringY(s, L.fbEnd));
+      ctx.lineTo(pad.x, L.stringY(s, pad.x));
+      ctx.lineTo(brX, L.stringY(s, pad.x));
       ctx.stroke();
-      ctx.globalAlpha = 1;
     }
-    // peg + string name on the scroll
-    ctx.fillStyle = '#2a1405';
-    ctx.beginPath();
-    ctx.arc((neck.x + L.nutX) / 2, y, Math.min(20, L.laneH * 0.3), 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = 1;
+    // string name on the pegbox
     ctx.fillStyle = STRINGS[s].color;
-    ctx.font = `800 ${small ? 16 : 22}px "Baloo 2", system-ui`;
+    ctx.font = `800 ${Math.round(Math.min(16, sp0 * 0.75))}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(STRINGS[s].name, (neck.x + L.nutX) / 2, y + 1);
+    ctx.fillText(STRINGS[s].name, L.openX, L.stringY(s, L.nutX) + 1);
     ctx.textBaseline = 'alphabetic';
     if (showNames) {
-      ctx.font = `700 ${small ? 10 : 13}px "Baloo 2", system-ui`;
-      ctx.fillStyle = 'rgba(255,255,255,0.42)';
+      ctx.font = `700 ${Math.round(Math.max(9, Math.min(12, sp0 * 0.42)))}px ${FONT}`;
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
       for (let k = 1; k <= 8; k++) {
-        const name = midiName(STRINGS[s].midi + k).replace(/\d/, '');
-        ctx.fillText(name, L.semisX(k), y - L.laneH * 0.22);
+        const x = L.semisX(k);
+        ctx.fillText(midiName(STRINGS[s].midi + k).replace(/\d/, ''), x, L.stringY(s, x) - L.spacing(x) * 0.2);
       }
     }
   }
 
-  // ---- target finger ----
+  // ---- target: finger spot and bow stretch ----
+  const tgt = t.target;
   if (tgt) {
-    const y = L.laneY(tgt.string);
-    const pulse = 1 + 0.12 * Math.sin(now / 160);
+    const pulse = 1 + 0.15 * Math.sin(now / 160);
     if (tgt.semis === 0) {
-      // open string: glow along the string
+      const y = L.stringY(tgt.string, L.nutX);
       ctx.strokeStyle = STRINGS[tgt.string].color;
-      ctx.globalAlpha = 0.35 + 0.2 * Math.sin(now / 180);
-      ctx.lineWidth = L.laneH * 0.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(L.nutX + 20, y);
-      ctx.lineTo(L.fbEnd - 20, y);
+      ctx.lineWidth = 4;
+      roundRect(ctx, L.x0 + 2, y - sp0 * 0.5 * pulse, L.nutX - L.x0 - 4, sp0 * pulse, sp0 * 0.5);
       ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#fff';
-      ctx.font = `800 ${small ? 14 : 18}px "Baloo 2", system-ui`;
-      ctx.textAlign = 'center';
-      ctx.fillText(`open ${STRINGS[tgt.string].name}: no fingers`, (L.nutX + L.fbEnd) / 2, y - L.laneH * 0.3);
     } else {
       const x = L.semisX(tgt.semis);
-      const r = Math.min(30, L.laneH * 0.36) * pulse;
-      ctx.lineWidth = 5;
-      ctx.strokeStyle = FINGER_COLORS[tgt.finger];
+      const y = L.stringY(tgt.string, x);
+      const r = L.spacing(x) * 0.75 * pulse;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#fff';
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.fillStyle = FINGER_COLORS[tgt.finger];
-      ctx.globalAlpha = 0.3;
+      ctx.globalAlpha = 0.45;
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+    const y = L.stringY(tgt.string, pad.x);
+    const lo = pad.x + Math.min(tgt.bow.from, tgt.bow.to) * pad.w;
+    const hi = pad.x + Math.max(tgt.bow.from, tgt.bow.to) * pad.w;
+    const padSp = L.spacing(pad.x);
+    roundRect(ctx, lo, y - padSp * 0.45, hi - lo, padSp * 0.9, padSp * 0.45);
+    ctx.globalAlpha = 0.55 + 0.2 * Math.sin(now / 180);
+    ctx.fillStyle = tgt.bow.dir === 'down' ? DOWN : UP;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    if (t.progress > 0) {
+      const px = pad.x + (tgt.bow.from + (tgt.bow.to - tgt.bow.from) * t.progress) * pad.w;
       ctx.fillStyle = '#fff';
-      ctx.font = `800 ${Math.round(r * 0.9)}px "Baloo 2", system-ui`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(tgt.finger), x, y + 1);
-      ctx.textBaseline = 'alphabetic';
+      ctx.beginPath();
+      ctx.arc(px, y, 6, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
   // ---- demo ghost hand ----
   if (t.ghost) {
     const g = t.ghost;
-    const y = L.laneY(g.string);
     if (g.semis > 0) {
+      const x = L.semisX(g.semis);
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.beginPath();
-      ctx.arc(L.semisX(g.semis), y, Math.min(22, L.laneH * 0.28), 0, Math.PI * 2);
+      ctx.arc(x, L.stringY(g.string, x), L.spacing(x) * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
     drawBowStick(ctx, L, pad.x + g.bowPos * pad.w, g.string, g.dir, 0.75);
@@ -518,10 +719,10 @@ export function drawTouchViolin(
 
   // ---- the player's fingers ----
   for (const f of st.fingers.values()) {
-    const y = L.laneY(f.s);
     const semis = st.opts.snap ? Math.round(f.semis) : f.semis;
     const x = semis > 0 ? L.semisX(semis) : f.x;
-    const r = Math.min(26, L.laneH * 0.32);
+    const y = L.stringY(f.s, Math.max(L.nutX, x));
+    const r = Math.max(11, L.spacing(x) * 0.65);
     ctx.fillStyle = semis > 0 ? '#ffe1c4' : 'rgba(255,225,196,0.35)';
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -530,52 +731,74 @@ export function drawTouchViolin(
     ctx.strokeStyle = STRINGS[f.s].color;
     ctx.stroke();
     if (semis > 0) {
-      ctx.fillStyle = '#3a1a00';
-      ctx.font = `800 ${Math.round(r * 0.7)}px "Baloo 2", system-ui`;
+      // name above the finger, where the fingertip doesn't hide it
+      const name = midiName(STRINGS[f.s].midi + Math.round(semis)).replace(/\d/, '');
+      ctx.font = `800 15px ${FONT}`;
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(midiName(STRINGS[f.s].midi + Math.round(semis)).replace(/\d/, ''), x, y + 1);
-      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(name, x, L.top ? L.yc + L.neckHalf + 18 : L.yc - L.neckHalf - 8);
     }
   }
 
   // ---- the player's bow ----
   if (st.bow) {
-    const s = st.activeString ?? L.yToString(st.bow.y);
+    const s = st.activeString ?? L.padString(st.bow.y);
     drawBowStick(ctx, L, st.bow.x, s, st.lastDir, 1);
-  } else if (!tgt && !t.ghost) {
-    ctx.fillStyle = 'rgba(255,240,220,0.85)';
-    ctx.font = `800 ${small ? 15 : 20}px "Baloo 2", system-ui`;
-    ctx.textAlign = 'center';
-    ctx.fillText('↔ drag here to bow', pad.x + pad.w / 2, pad.y + (small ? 18 : 26));
   }
+
+  // ---- free play: what you're playing, big ----
+  if (!t.falling) {
+    const cx = L.w / 2;
+    const cy = L.top ? (L.strikeY + L.h) / 2 - 20 : L.strikeY * 0.45;
+    ctx.textAlign = 'center';
+    if (sounding) {
+      ctx.fillStyle = STRINGS[sounding.string].color;
+      ctx.font = `800 ${Math.round(Math.min(120, Math.abs(L.far - L.strikeY) * 0.35))}px ${FONT}`;
+      ctx.fillText(midiName(Math.round(sounding.midi)), cx, cy + 20);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = `700 20px ${FONT}`;
+      ctx.fillText(sounding.dir === 'down' ? '⊓ down bow' : 'V up bow', cx, cy + 56);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.font = `800 22px ${FONT}`;
+      ctx.fillText('Left hand: press the strings on the neck', cx, cy - 6);
+      ctx.fillText('Right hand: drag along the violin to bow ↔', cx, cy + 26);
+      ctx.font = `700 16px ${FONT}`;
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText('Pull right for a down bow, push left for an up bow', cx, cy + 56);
+    }
+  }
+  ctx.font = `700 12px ${FONT}`;
+  ctx.fillStyle = 'rgba(255,240,220,0.75)';
+  ctx.textAlign = 'left';
+  const ly = L.top ? pad.y + pad.h - 5 : pad.y + pad.h + 13;
+  ctx.fillText('frog', pad.x + 4, ly);
+  ctx.textAlign = 'right';
+  ctx.fillText('tip', pad.x + pad.w - 4, ly);
 }
 
-/** A bow seen from above: hair crossing all the strings at x, tilted toward the string it plays. */
+/** A bow seen from above: hair crossing the strings at x, tilted toward the string it plays. */
 function drawBowStick(ctx: CanvasRenderingContext2D, L: Layout, x: number, s: number, dir: BowDir | null, alpha: number) {
   const { pad } = L;
-  const y = L.laneY(s);
-  const tilt = (s - 1.5) * 0.06; // the bow leans to reach the outer strings
-  const top = pad.y + 4;
-  const bot = pad.y + pad.h - 4;
+  const y = L.stringY(s, pad.x);
+  const tilt = (s - 1.5) * 0.08;
+  const top = pad.y - pad.h * 0.35;
+  const bot = pad.y + pad.h * 1.2;
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(x, y);
   ctx.rotate(tilt);
-  // stick
   ctx.fillStyle = '#4a2208';
-  roundRect(ctx, 7, top - y, 6, bot - top, 3);
+  roundRect(ctx, 5, top - y, 5, bot - top, 2.5);
   ctx.fill();
-  // hair
   ctx.fillStyle = '#f4ecdc';
-  roundRect(ctx, -5, top - y + 6, 10, bot - top - 12, 4);
+  roundRect(ctx, -4, top - y + 4, 8, bot - top - 8, 3);
   ctx.fill();
   ctx.restore();
-  // contact glow on the string
   ctx.globalAlpha = alpha;
   ctx.fillStyle = dir === 'down' ? DOWN : dir === 'up' ? UP : '#fff';
   ctx.beginPath();
-  ctx.arc(x, y, 9, 0, Math.PI * 2);
+  ctx.arc(x, y, 7, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 }

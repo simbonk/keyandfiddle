@@ -4,9 +4,9 @@ import { FullscreenButton, usePlayingMode } from '../../ui/chrome';
 import { SongPicker } from '../../ui/SongPicker';
 import { useAnimationCanvas } from '../../ui/useAnimationCanvas';
 import { STRINGS, VIOLIN_SONGS, violinNotes } from '../theory';
-import { type VNoteState, drawViolinHighway } from '../violinHighway';
+import type { VNoteState } from '../violinHighway';
 import { loadViolin, sendStrings, silence, unlockAudio } from './engine';
-import { type DrawTargets, type ViolinOptions, TouchViolinState, drawTouchViolin, violinLayout } from './instrument';
+import { type DrawTargets, type ViolinOptions, TouchViolinState, VIOLIN_SIZES, drawTouchViolin, screenPxPerMm, violinLayout } from './instrument';
 import type { StringMsg } from './violinProcessor';
 
 /** The "Touch violin" screen: free play or a song, played on the iPad held like a violin. */
@@ -45,9 +45,15 @@ export function TouchViolinTab() {
 const OPTS_KEY = 'kf.tv.opts';
 interface StoredOpts extends ViolinOptions {
   names: boolean;
+  /** strings further apart than a real violin */
+  big: boolean;
+  /** neck along the top edge (fingers curl over it), music below */
+  neckTop: boolean;
+  /** violin size, e.g. '1/2' */
+  size: string;
 }
 function loadOpts(): StoredOpts {
-  const def: StoredOpts = { snap: true, easyBow: true, vibrato: true, names: true };
+  const def: StoredOpts = { snap: true, easyBow: true, vibrato: true, names: false, big: false, neckTop: true, size: '4/4' };
   try {
     return { ...def, ...JSON.parse(localStorage.getItem(OPTS_KEY) || '{}') };
   } catch {
@@ -116,7 +122,11 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
   // ---------------- per-frame: sound, scoring, drawing ----------------
   const surfaceRef = useAnimationCanvas((ctx, w, h, now, dt) => {
     const st = g.current;
-    if (vs.L.w !== w || vs.L.h !== h) vs.L = violinLayout(w, h);
+    const key = `${opts.big}${opts.neckTop}${opts.size}`;
+    if (vs.L.w !== w || vs.L.h !== h || layoutKey.current !== key) {
+      vs.L = violinLayout(w, h, screenPxPerMm(), opts.big, opts.neckTop, VIOLIN_SIZES.find((z) => z[0] === opts.size)?.[1] ?? 1);
+      layoutKey.current = key;
+    }
     let waiting = false;
     let ghost: DrawTargets['ghost'] = null;
 
@@ -152,11 +162,13 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
         target: tn ? { string: tn.fing.string, semis: tn.fing.semis, finger: tn.fing.finger, bow: tn.bow } : null,
         ghost,
         progress: holding && st.hold ? Math.min(1, (now - st.hold.t0) / st.hold.expMs) : 0,
+        falling: song
+          ? { notes: st.notes, songBeat: st.songBeat, visibleBeats: 4 / Math.max(0.5, speed), current: cur, waiting }
+          : null,
       },
       opts.names,
       now,
     );
-    highwayState.current = { waiting };
   });
 
   function runDemo(now: number): DrawTargets['ghost'] {
@@ -263,26 +275,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
   const wrongSince = useRef(0);
   const lastHint = useRef(0);
 
-  // ---------------- highway ----------------
-  const highwayState = useRef({ waiting: false });
-  const highwayRef = useAnimationCanvas((ctx, w, h, now) => {
-    const st = g.current;
-    const snd = vs.sounding();
-    drawViolinHighway({
-      ctx,
-      w,
-      h,
-      songBeat: st.songBeat,
-      visibleBeats: 6 / Math.max(0.5, speed),
-      notes: st.notes,
-      current: pending(),
-      waiting: highwayState.current.waiting,
-      now,
-      liveBowPos: snd?.bowPos ?? (vs.bow ? Math.max(0, Math.min(1, (vs.bow.x - vs.L.pad.x) / vs.L.pad.w)) : null),
-      liveBowDir: snd?.dir ?? null,
-      heardString: snd?.string ?? null,
-    });
-  }, !!song);
+  const layoutKey = useRef('');
 
   useEffect(() => {
     const id = window.setInterval(() => force((x) => x + 1), 200);
@@ -346,7 +339,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
     : null;
 
   return (
-    <div className="lesson touch-violin">
+    <div className={`lesson touch-violin ${opts.neckTop ? 'neck-top' : ''}`}>
       <div className="game-bar">
         <button className="btn small ghost back" onClick={onExit}>
           ◀<span className="lbl"> Songs</span>
@@ -402,6 +395,26 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
                 <Toggle label="Easy bow" hint="The string your finger is on plays, wherever you bow" on={opts.easyBow} set={(v) => setOpt('easyBow', v)} />
                 <Toggle label="Vibrato" hint="A little wobble on long notes" on={opts.vibrato} set={(v) => setOpt('vibrato', v)} />
                 <Toggle label="Note names" on={opts.names} set={(v) => setOpt('names', v)} />
+                <Toggle
+                  label="Neck along the top edge"
+                  hint="Fingers curl over the top of the iPad. Off: bottom edge"
+                  on={opts.neckTop}
+                  set={(v) => setOpt('neckTop', v)}
+                />
+                <div className="opt-row">
+                  <span>
+                    Violin size
+                    <span className="muted small tv-hint">Smaller violins have closer fingers, for smaller hands</span>
+                  </span>
+                  <div className="seg">
+                    {VIOLIN_SIZES.map(([name]) => (
+                      <button key={name} className={opts.size === name ? 'on' : ''} onClick={() => setOpts((o) => ({ ...o, size: name }))}>
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Toggle label="Wider strings" hint="Strings further apart, for bigger fingertips" on={opts.big} set={(v) => setOpt('big', v)} />
               </div>
             </>
           )}
@@ -409,9 +422,21 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
         <FullscreenButton />
       </div>
 
-      {song && (
-        <div className="highway-wrap tv-highway">
-          <canvas ref={highwayRef} className="highway" />
+      <div className="tv-surface">
+        <canvas
+          ref={surfaceRef}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+          onLostPointerCapture={onUp}
+          onContextMenu={(e) => e.preventDefault()}
+        />
+        {song && (
+        <div
+          className="tv-over"
+          style={opts.neckTop ? { top: vs.L.strikeY, bottom: 0 } : { top: 0, height: Math.max(120, vs.L.strikeY) }}
+        >
           {!running && !done && (
             <div className="overlay-center">
               <button className="btn big primary" onClick={start}>
@@ -471,16 +496,6 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
           )}
         </div>
       )}
-      <div className="tv-surface">
-        <canvas
-          ref={surfaceRef}
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
-          onLostPointerCapture={onUp}
-          onContextMenu={(e) => e.preventDefault()}
-        />
       </div>
       <div className="tv-rotate">↻ Turn the iPad sideways and hold it like a violin</div>
     </div>

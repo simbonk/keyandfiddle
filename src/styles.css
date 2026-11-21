@@ -1883,18 +1883,36 @@ select option {
 }
 
 /* ---------- touch violin ---------- */
-.touch-violin .tv-highway {
-  flex: 0 0 34%;
-  min-height: 150px;
-  border-radius: 16px;
+.tv-over {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+}
+/* neck along the top edge: the controls move to the bottom */
+.touch-violin.neck-top .game-bar {
+  order: 2;
+}
+.touch-violin.neck-top .opts-pop {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+.app.playing .touch-violin.neck-top {
+  margin-top: -8px;
+}
+.tv-over > * {
+  pointer-events: auto;
+}
+.tv-over .tv-now {
+  pointer-events: none;
 }
 .tv-surface {
   position: relative;
   flex: 1;
-  min-height: 180px;
+  min-height: 260px;
   border-radius: 16px;
   overflow: hidden;
-  background: radial-gradient(circle at 70% 50%, #2a1a10 0%, #120b20 80%);
+  background: linear-gradient(#120b33, #1d1450 70%, #160f2c);
 }
 .tv-surface canvas {
   position: absolute;
@@ -1914,7 +1932,9 @@ select option {
 }
 .tv-now {
   position: absolute;
-  left: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
   top: 8px;
   padding: 2px 10px;
   border-radius: 10px;

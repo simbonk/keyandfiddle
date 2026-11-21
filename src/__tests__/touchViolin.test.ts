@@ -33,32 +33,32 @@ describe('bowed string model', () => {
 describe('touch violin input', () => {
   const mk = () => {
     const v = new TouchViolinState();
-    v.L = violinLayout(1100, 500);
+    v.L = violinLayout(1180, 760, 5.2);
     return v;
   };
   it('a finger on the A string tape 2 plays C#', () => {
     const v = mk();
     const L = v.L;
-    v.down(1, L.semisX(4) + 3, L.laneY(2), 0);
+    v.down(1, L.semisX(4) + 3, L.stringY(2, L.semisX(4)) + 2, 0);
     expect(v.stopped(2)).toBe(4);
     expect(v.stopped(3)).toBe(0);
   });
   it('the finger nearest the bridge wins', () => {
     const v = mk();
     const L = v.L;
-    v.down(1, L.semisX(2), L.laneY(1), 0);
-    v.down(2, L.semisX(5), L.laneY(1), 0);
+    v.down(1, L.semisX(2), L.stringY(1, L.semisX(2)), 0);
+    v.down(2, L.semisX(5), L.stringY(1, L.semisX(5)), 0);
     expect(v.stopped(1)).toBe(5);
   });
   it('bowing right is a down bow, and easy bow plays the fingered string', () => {
     const v = mk();
     const L = v.L;
-    v.down(1, L.semisX(2), L.laneY(0), 0); // B on G string... semis 2 = A3
-    v.down(2, L.pad.x + 40, L.laneY(3), 0); // bow over the E string
+    v.down(1, L.semisX(2), L.stringY(0, L.semisX(2)), 0); // B on G string... semis 2 = A3
+    v.down(2, L.pad.x + 40, L.stringY(3, L.pad.x), 0); // bow over the E string
     let t = 0;
     for (let i = 0; i < 20; i++) {
       t += 16;
-      v.move(2, L.pad.x + 40 + i * 12, L.laneY(3), t);
+      v.move(2, L.pad.x + 40 + i * 4, L.stringY(3, L.pad.x), t);
       v.frame(t, 0.016);
     }
     const s = v.sounding();
@@ -72,12 +72,12 @@ describe('touch violin input', () => {
   it('a bow change starts a new stroke', () => {
     const v = mk();
     const L = v.L;
-    v.down(2, L.pad.x + 100, L.laneY(2), 0);
+    v.down(2, L.pad.x + 100, L.stringY(2, L.pad.x), 0);
     const s0 = v.strokeId;
     let t = 0;
-    for (let i = 0; i < 10; i++) v.move(2, L.pad.x + 100 + i * 10, L.laneY(2), (t += 16));
+    for (let i = 0; i < 10; i++) v.move(2, L.pad.x + 100 + i * 10, L.stringY(2, L.pad.x), (t += 16));
     const s1 = v.strokeId;
-    for (let i = 0; i < 10; i++) v.move(2, L.pad.x + 190 - i * 10, L.laneY(2), (t += 16));
+    for (let i = 0; i < 10; i++) v.move(2, L.pad.x + 190 - i * 10, L.stringY(2, L.pad.x), (t += 16));
     expect(v.strokeId).toBeGreaterThan(s1);
     expect(s1).toBeGreaterThanOrEqual(s0);
   });
