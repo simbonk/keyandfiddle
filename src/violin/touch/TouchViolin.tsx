@@ -123,6 +123,8 @@ export function VoiceSelect() {
 const OPTS_KEY = "kf.tv.opts";
 /** px kept clear under the status bar when the violin is drawn sideways in portrait */
 const STATUS_BAR = 32;
+/** height of the bottom button bar on phones */
+const PHONE_BAR = 58;
 interface StoredOpts extends ViolinOptions {
   names: boolean;
   /** strings further apart than a real violin */
@@ -212,17 +214,21 @@ function TouchViolinPlay({
   }, []);
   const portrait = vp.h > vp.w;
   const rot: "none" | "cw" | "ccw" = portrait ? opts.turn : "none";
+  // phones held like a violin: the buttons sit in a bar along the bottom
+  // of the screen, so the tracks get the whole width
+  const phoneBar = rot !== "none" && vp.w < 600;
+  const barH = phoneBar ? PHONE_BAR : 0;
   const frame: React.CSSProperties =
     rot === "none"
       ? {}
       : {
           // keep clear of the status bar along the top of the screen (blurry there)
-          width: vp.h - STATUS_BAR,
+          width: vp.h - STATUS_BAR - barH,
           height: vp.w,
           transform:
             rot === "cw"
               ? `translate(${vp.w}px, ${STATUS_BAR}px) rotate(90deg)`
-              : `translateY(${vp.h}px) rotate(-90deg)`,
+              : `translateY(${vp.h - barH}px) rotate(-90deg)`,
         };
 
   // words and popups turn to face you: in the violin's frame, and on the screen
@@ -560,14 +566,7 @@ function TouchViolinPlay({
     ? `${midiName(Math.round(snd.midi))}${Math.abs(snd.midi - Math.round(snd.midi)) > 0.08 ? (snd.midi > Math.round(snd.midi) ? " ↑" : " ↓") : ""}`
     : null;
 
-  return (
-    <>
-      <div
-        className={`lesson touch-violin tv-full ${opts.neckTop ? "neck-top" : ""} ${rot !== "none" ? "tv-turned" : ""} ${angled ? "tv-angled" : ""}`}
-        style={{ ...frame, ["--tv-read" as string]: `${readDeg}deg`,
-          ["--tv-straight" as string]: `${straightDeg}deg`,
-        }}
-      >
+  const bar = (
         <div className="game-bar">
           <button className="btn small ghost back" onClick={onExit} aria-label="Songs">
             ◀<span className="lbl"> Songs</span>
@@ -576,7 +575,7 @@ function TouchViolinPlay({
             {song ? `${song.emoji} ${song.title}` : "🎻 Free play"}
           </div>
           <div className="bar-feedback">
-            {feedback ? (
+            {feedback && !done ? (
               <span key={feedback.id} className={`fb-pill ${feedback.tone}`}>
                 {feedback.text}
               </span>
@@ -790,6 +789,17 @@ function TouchViolinPlay({
           </button>
           <FullscreenButton />
         </div>
+  );
+
+  return (
+    <>
+      <div
+        className={`lesson touch-violin tv-full ${opts.neckTop ? "neck-top" : ""} ${rot !== "none" ? "tv-turned" : ""} ${angled ? "tv-angled" : ""}`}
+        style={{ ...frame, ["--tv-read" as string]: `${readDeg}deg`,
+          ["--tv-straight" as string]: `${straightDeg}deg`,
+        }}
+      >
+        {!phoneBar && bar}
 
         <div className="tv-surface">
           <canvas
@@ -901,6 +911,14 @@ function TouchViolinPlay({
           )}
         </div>
       </div>
+      {phoneBar && (
+        <div
+          className={`touch-violin tv-bottombar ${rot === "ccw" ? "flipped" : ""}`}
+          style={{ height: PHONE_BAR }}
+        >
+          {bar}
+        </div>
+      )}
       {/* outside the turned frame: read upright, before turning the iPad */}
       {!opts.tipSeen && (
         <RotateTip

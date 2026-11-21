@@ -19,6 +19,9 @@
 
 * {
   box-sizing: border-box;
+  /* no double-tap zoom anywhere (iOS ignores user-scalable=no); elements that
+     need their own gestures set touch-action themselves and win over this */
+  touch-action: manipulation;
 }
 html,
 body,
@@ -2358,4 +2361,51 @@ select option {
   gap: 10px;
   margin-top: 10px;
   flex-wrap: wrap;
+}
+
+/* phones held like a violin: the buttons sit in a bar along the bottom of the screen */
+.touch-violin.tv-bottombar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  display: flex;
+  align-items: center;
+  padding: 0 8px env(safe-area-inset-bottom);
+  background: var(--bg);
+}
+.touch-violin.tv-bottombar.flipped {
+  transform: rotate(180deg);
+}
+.tv-bottombar .game-bar {
+  width: 100%;
+  margin: 0;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.tv-bottombar .game-bar .lbl,
+.tv-bottombar .game-bar .game-title {
+  display: none;
+}
+.tv-bottombar .bar-feedback {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 90px);
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.tv-bottombar .bar-feedback .fb-pill,
+.tv-bottombar .tv-playing {
+  display: inline-block;
+  white-space: nowrap;
+}
+.tv-turned .overlay-center > .tv-turn {
+  max-width: min(340px, 80vw);
+}
+.tv-turn .row {
+  flex-wrap: wrap;
+  justify-content: center;
 }
