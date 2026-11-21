@@ -153,7 +153,8 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
     if (!stream || !stream.active) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          // auto gain on: iPad mics are much quieter than iPhone ones
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
         });
         own = true;
       } catch (e) {
@@ -173,7 +174,7 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
     let total = 0;
     let startedAt = -1; // sample index where the sound began
     let quietFor = 0;
-    let noise = 0.004;
+    let noise = 0.002;
 
     const result = await new Promise<Float32Array | null>((resolve) => {
       let finished = false;
@@ -202,18 +203,18 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
           chunks.push(c);
           total += c.length;
           while (chunks.length > 8) total -= chunks.shift()!.length;
-          if (rms > Math.max(0.02, noise * 3)) startedAt = total - c.length;
+          if (rms > Math.max(0.008, noise * 4)) startedAt = total - c.length;
           else noise = noise * 0.9 + rms * 0.1;
         } else {
           chunks.push(c);
           total += c.length;
           // Only stop by itself after a real pause, so a whole word or phrase
           // ("hello!") is kept, not just its first syllable.
-          quietFor = rms < Math.max(0.008, noise * 1.5) ? quietFor + c.length : 0;
+          quietFor = rms < Math.max(0.004, noise * 1.8) ? quietFor + c.length : 0;
           const soFar = total - startedAt;
           if ((quietFor > sr * 0.8 && soFar > sr * 0.8) || soFar > sr * MAX_SAMPLE_SEC) finish(true);
         }
-        onLevel(Math.min(1, rms * 5), startedAt >= 0);
+        onLevel(Math.min(1, Math.sqrt(rms) * 3), startedAt >= 0);
       };
       // give up if nothing is heard for a while
       setTimeout(() => finish(true), 10000);
@@ -247,7 +248,7 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
 export function shapeSample(x: Float32Array, sr: number): Float32Array | null {
   let peak = 0;
   for (let i = 0; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
-  if (peak < 0.02) return null;
+  if (peak < 0.006) return null;
   let a = 0;
   while (a < x.length && Math.abs(x[a]) < peak * 0.05) a++;
   a = Math.max(0, a - Math.round(sr * 0.03));
