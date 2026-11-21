@@ -379,6 +379,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
     : null;
 
   return (
+    <>
     <div className={`lesson touch-violin tv-full ${opts.neckTop ? 'neck-top' : ''} ${rot !== 'none' ? 'tv-turned' : ''}`} style={frame}>
       <div className="game-bar">
         <button className="btn small ghost back" onClick={onExit}>
@@ -551,8 +552,10 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
         </div>
       )}
       </div>
-      {!opts.tipSeen && <RotateTip portrait={portrait} onDone={() => setOpts((o) => ({ ...o, tipSeen: true }))} />}
     </div>
+    {/* outside the turned frame: read upright, before turning the iPad */}
+    {!opts.tipSeen && <RotateTip portrait={portrait} onDone={() => setOpts((o) => ({ ...o, tipSeen: true }))} />}
+    </>
   );
 }
 
