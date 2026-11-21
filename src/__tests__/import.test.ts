@@ -43,6 +43,30 @@ describe('fingering', () => {
     assignFingers(ns);
     expect(ns.map((n) => n.finger)).toEqual([5, 4, 3, 2, 1]);
   });
+  it('left hand G-D then C-G: C gets the pinky so G is the thumb', () => {
+    const ns: FingerNote[] = [43, 50, 48, 55, 43, 50].map((m, i) => ({ midi: m, beat: i, left: true }));
+    assignFingers(ns);
+    expect(ns.map((n) => n.finger)).toEqual([5, 1, 5, 1, 5, 1]);
+  });
+  it('a broken chord G-C-E stays in one stretched hand: 1 3 5', () => {
+    const ns: FingerNote[] = [67, 72, 76, 67, 72, 76, 67, 72, 76].map((m, i) => ({ midi: m, beat: i, left: false }));
+    assignFingers(ns);
+    expect(ns.map((n) => n.finger)).toEqual([1, 3, 5, 1, 3, 5, 1, 3, 5]);
+  });
+  it('never uses one finger for two different keys in a row without moving the hand', () => {
+    for (const s of PIANO_SONGS) {
+      const ns: FingerNote[] = s.notes.map((n) => ({ midi: n.midi!, beat: n.beat, left: !!n.tag?.includes('L') }));
+      assignFingers(ns);
+      for (const left of [false, true]) {
+        const h = ns.filter((n) => n.left === left).sort((a, b) => a.beat - b.beat || a.midi - b.midi);
+        for (let i = 1; i < h.length; i++) {
+          const [a, b] = [h[i - 1], h[i]];
+          if (Math.abs(a.beat - b.beat) < 0.01 || a.handPos !== b.handPos || a.midi === b.midi) continue;
+          expect(a.finger, `${s.id} ${left ? 'L' : 'R'} beat ${b.beat}`).not.toBe(b.finger);
+        }
+      }
+    }
+  });
   it('gives every note in every song a finger 1..5', () => {
     for (const s of PIANO_SONGS) {
       const ns: FingerNote[] = s.notes.map((n) => ({ midi: n.midi!, beat: n.beat, left: !!n.tag?.includes('L') }));
