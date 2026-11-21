@@ -18,7 +18,7 @@ const LENGTHS: [number, string][] = [
   [4, '𝅝 4 beats'],
 ];
 
-async function loadGray(file: File): Promise<{ w: number; h: number; data: Uint8Array; url: string }> {
+async function loadGray(file: File, width?: number): Promise<{ w: number; h: number; data: Uint8Array; url: string }> {
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.decoding = 'async';
@@ -28,7 +28,8 @@ async function loadGray(file: File): Promise<{ w: number; h: number; data: Uint8
   });
   // work at a size where a staff space is roughly 10-20 pixels
   let scale = 1;
-  if (img.naturalWidth > 2000) scale = 2000 / img.naturalWidth;
+  if (width) scale = width / img.naturalWidth;
+  else if (img.naturalWidth > 2000) scale = 2000 / img.naturalWidth;
   else if (img.naturalWidth < 1300) scale = 1300 / img.naturalWidth;
   const w = Math.round(img.naturalWidth * scale);
   const h = Math.round(img.naturalHeight * scale);
@@ -70,7 +71,18 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
         if (dead) return;
         setImg(g.url);
         await new Promise((r) => setTimeout(r, 30)); // let "reading" paint first
-        const r = recognize(g);
+        let r = recognize(g);
+        // small print (two pages side by side, a far-off photo): read again bigger
+        if (r.space < 10 && g.w < 3200) {
+          const big = await loadGray(file, Math.min(3200, Math.round((g.w * 13) / r.space)));
+          URL.revokeObjectURL(big.url);
+          try {
+            const r2 = recognize(big);
+            if (r2.notes.length >= r.notes.length * 0.8) r = r2;
+          } catch {
+            /* keep the first reading */
+          }
+        }
         if (!dead) setRes(r);
       } catch (e) {
         if (!dead) setErr((e as Error).message);
@@ -163,6 +175,7 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
     if (staff === undefined) {
       let bd = Infinity;
       res.staves.forEach((s, i) => {
+        if (x < s.x0 - s.space * 2 || x > s.x1 + s.space) return;
         const d = Math.abs(y - (s.lines[0] + s.lines[4]) / 2);
         if (d < bd) [bd, si] = [d, i];
       });
@@ -384,7 +397,8 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
             className="adding"
           >
             {res.notes.map((n) => {
-              const left = res.staves[n.staff].clef === 'bass' && res.staves.some((s, i) => i !== n.staff && s.system === res.staves[n.staff].system);
+              // the lower staff of a pair is the left hand, whatever its clef
+              const left = res.staves.some((s, i) => i < n.staff && s.system === res.staves[n.staff].system);
               const r = res.space * 0.75;
               const on = n.id === sel || n.id === playingId;
               const isOff = off.has(n.id);

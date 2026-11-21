@@ -153,67 +153,105 @@ function findStaves(b: Bin): Staff[] {
     x0: number;
     x1: number;
   }
-  const rows: { y: number; x0: number; x1: number }[] = [];
+  // every long horizontal run in every row (a picture can hold two pages side by side)
+  const minRun = w * 0.12;
+  const rows: { y: number; x0: number; x1: number }[][] = [];
   for (let y = 0; y < h; y++) {
-    let best = 0;
-    let bx = 0;
+    const segs: { y: number; x0: number; x1: number }[] = [];
     let run = 0;
     let gap = 0;
     let start = 0;
+    const close = () => {
+      if (run > minRun) segs.push({ y, x0: start, x1: start + run });
+      run = 0;
+      gap = 0;
+    };
     for (let x = 0; x < w; x++) {
       if (b.d[y * w + x]) {
         if (run === 0) start = x;
         run += 1 + gap;
         gap = 0;
-        if (run > best) {
-          best = run;
-          bx = start;
-        }
       } else if (run > 0 && gap < 2) gap++; // bridge tiny breaks
-      else {
-        run = 0;
-        gap = 0;
+      else if (run > 0) close();
+    }
+    if (run > 0) close();
+    rows.push(segs);
+  }
+  // stack runs from neighbouring rows that overlap into lines
+  const lines: Line[] = [];
+  let open: Line[] = [];
+  for (let y = 0; y < h; y++) {
+    const next: Line[] = [];
+    for (const r of rows[y]) {
+      const l = open.find((o) => o.y1 === y - 1 && Math.min(o.x1, r.x1) - Math.max(o.x0, r.x0) > (r.x1 - r.x0) * 0.5);
+      if (l) {
+        l.y1 = y;
+        l.x0 = Math.min(l.x0, r.x0);
+        l.x1 = Math.max(l.x1, r.x1);
+        next.push(l);
+      } else {
+        const nl = { y0: y, y1: y, x0: r.x0, x1: r.x1 };
+        lines.push(nl);
+        next.push(nl);
       }
     }
-    if (best > w * 0.15) rows.push({ y, x0: bx, x1: bx + best });
+    open = next;
   }
-  const lines: Line[] = [];
-  for (const r of rows) {
-    const l = lines[lines.length - 1];
-    if (l && r.y === l.y1 + 1) {
-      l.y1 = r.y;
-      l.x0 = Math.min(l.x0, r.x0);
-      l.x1 = Math.max(l.x1, r.x1);
-    } else lines.push({ y0: r.y, y1: r.y, x0: r.x0, x1: r.x1 });
+  // columns: lines that overlap sideways belong together
+  const cols: Line[][] = [];
+  for (const l of [...lines].sort((a, c) => a.x0 - c.x0)) {
+    const c = cols.find((cl) => cl.some((o) => Math.min(o.x1, l.x1) - Math.max(o.x0, l.x0) > Math.min(o.x1 - o.x0, l.x1 - l.x0) * 0.5));
+    if (c) c.push(l);
+    else cols.push([l]);
   }
+  cols.sort((a, c) => Math.min(...a.map((l) => l.x0)) - Math.min(...c.map((l) => l.x0)));
   const staves: Staff[] = [];
   const cy = (l: Line) => (l.y0 + l.y1) / 2;
-  for (let i = 0; i + 4 < lines.length; ) {
-    const g = [1, 2, 3, 4].map((k) => cy(lines[i + k]) - cy(lines[i + k - 1]));
-    const m = g.reduce((a, c) => a + c, 0) / 4;
-    const thick = Math.max(...lines.slice(i, i + 5).map((l) => l.y1 - l.y0 + 1));
-    if (g.every((x) => x > m * 0.8 && x < m * 1.2) && m > thick * 2.5 && m > 4) {
-      const ls = lines.slice(i, i + 5);
-      staves.push({
-        lines: ls.map(cy),
-        x0: Math.min(...ls.map((l) => l.x0)),
-        x1: Math.max(...ls.map((l) => l.x1)),
-        space: m,
-        clef: 'treble',
-        system: 0,
-      });
-      // erase the staff lines where nothing crosses them
-      for (const l of ls) {
-        for (let x = l.x0; x <= l.x1; x++) {
-          const above = b.at(x, l.y0 - 1) || b.at(x, l.y0 - 2);
-          const below = b.at(x, l.y1 + 1) || b.at(x, l.y1 + 2);
-          if (!(above && below)) for (let y = l.y0; y <= l.y1; y++) b.d[y * w + x] = 0;
+  for (const col of cols) {
+    const ln = col.sort((a, c) => a.y0 - c.y0);
+    for (let i = 0; i + 4 < ln.length; ) {
+      const g = [1, 2, 3, 4].map((k) => cy(ln[i + k]) - cy(ln[i + k - 1]));
+      const m = g.reduce((a, c) => a + c, 0) / 4;
+      const thick = Math.max(...ln.slice(i, i + 5).map((l) => l.y1 - l.y0 + 1));
+      if (g.every((x) => x > m * 0.8 && x < m * 1.2) && m > thick * 2.5 && m > 4) {
+        const ls = ln.slice(i, i + 5);
+        staves.push({
+          lines: ls.map(cy),
+          x0: Math.min(...ls.map((l) => l.x0)),
+          x1: Math.max(...ls.map((l) => l.x1)),
+          space: m,
+          clef: 'treble',
+          system: 0,
+        });
+        // erase the staff lines where nothing crosses them
+        for (const l of ls) {
+          for (let x = l.x0; x <= l.x1; x++) {
+            const above = b.at(x, l.y0 - 1) || b.at(x, l.y0 - 2);
+            const below = b.at(x, l.y1 + 1) || b.at(x, l.y1 + 2);
+            if (!(above && below)) for (let y = l.y0; y <= l.y1; y++) b.d[y * w + x] = 0;
+          }
         }
-      }
-      i += 5;
-    } else i++;
+        i += 5;
+      } else i++;
+    }
   }
   return staves;
+}
+
+/**
+ * Treble or bass clef at the start of a staff. A treble clef reaches well above
+ * and below the staff; a bass clef sits in its top three-quarters (with two dots).
+ */
+function readClef(b: Bin, st: Staff): 'treble' | 'bass' {
+  const s = st.space;
+  const comps = components(b, st.x0 + s * 0.2, st.lines[0] - s * 3, st.x0 + s * 4.5, st.lines[4] + s * 3).filter(
+    (c) => c.maxx - c.minx > s * 1.0 && c.maxy - c.miny > s * 2,
+  );
+  if (!comps.length) return 'treble';
+  const c = comps.sort((a, d) => a.minx - d.minx)[0];
+  const tall = c.maxy - c.miny;
+  if (tall > s * 4.6 || c.maxy > st.lines[4] + s * 0.6) return 'treble';
+  return 'bass';
 }
 
 function groupSystems(b: Bin, staves: Staff[]) {
@@ -224,7 +262,8 @@ function groupSystems(b: Bin, staves: Staff[]) {
     s.system = sys;
     s.clef = 'treble';
     let joined = false;
-    if (n && n.lines[0] - s.lines[4] < s.space * 12) {
+    const sameCol = n && Math.min(n.x1, s.x1) - Math.max(n.x0, s.x0) > (s.x1 - s.x0) * 0.5;
+    if (n && sameCol && n.lines[0] - s.lines[4] > 0 && n.lines[0] - s.lines[4] < s.space * 12) {
       // a line on the left joining both staves (system barline or brace)
       const y0 = Math.round(s.lines[0]);
       const y1 = Math.round(n.lines[4]);
@@ -235,10 +274,10 @@ function groupSystems(b: Bin, staves: Staff[]) {
         if (dark > (y1 - y0) * 0.9) joined = true;
       }
     }
+    s.clef = readClef(b, s);
     if (joined) {
-      // a grand staff: treble on top, bass below
       n.system = sys;
-      n.clef = 'bass';
+      n.clef = readClef(b, n);
       i++;
     }
     sys++;
@@ -270,10 +309,11 @@ export function noteBeats(n: Pick<OmrNote, 'filled' | 'stem' | 'beams' | 'dotted
   return b;
 }
 
-function nearestStaff(staves: Staff[], y: number): number {
+function nearestStaff(staves: Staff[], y: number, x?: number): number {
   let best = -1;
   let bd = Infinity;
   staves.forEach((s, i) => {
+    if (x !== undefined && (x < s.x0 - s.space * 3 || x > s.x1 + s.space)) return;
     const mid = (s.lines[0] + s.lines[4]) / 2;
     const d = Math.abs(y - mid);
     if (d < bd) {
@@ -889,7 +929,7 @@ export function recognize(g0: Gray): OmrResult {
       return side >= s * 0.22 && side < s * 0.8 && Math.max(U.t, D.t) <= s * 0.3 && width >= s * 1.2 && width <= s * 2.4;
     });
     for (const h of [...strict, ...extra]) {
-      if (h.x < st.x0 + s * 1.5) continue;
+      if (h.x < st.x0 + s * 1.5 || h.x > st.x1) continue;
       if (heads.some((o) => Math.abs(o.x - h.x) < s * 0.9 && Math.abs(o.y - h.y) < s * 0.7)) continue;
       heads.push({ x: h.x, y: h.y, filled: false });
     }
@@ -908,7 +948,8 @@ export function recognize(g0: Gray): OmrResult {
   let notes: OmrNote[] = [];
   let id = 0;
   for (const h of heads) {
-    const si = nearestStaff(staves, h.y);
+    const si = nearestStaff(staves, h.y, h.x);
+    if (si < 0) continue;
     const st = staves[si];
     if (h.x <= ks.start[si]) continue;
     // the thick final barline looks like a stack of filled heads
@@ -1092,7 +1133,7 @@ export function toTimeline(r: OmrResult): TimedNote[] {
       const byStaff = new Map<OmrNote, TimedNote>();
       for (const p of placed.sort((a, b) => a.at - b.at || a.n.x - b.n.x)) {
         const st = r.staves[p.n.staff];
-        const tn: TimedNote = { midi: noteMidi(p.n, st, r.keySig), beat: t + p.at, beats: p.n.beats, left: st.clef === 'bass' && grand, id: p.n.id };
+        const tn: TimedNote = { midi: noteMidi(p.n, st, r.keySig), beat: t + p.at, beats: p.n.beats, left: grand && p.n.staff === idx[idx.length - 1], id: p.n.id };
         byStaff.set(p.n, tn);
       }
       for (const p of placed) {
