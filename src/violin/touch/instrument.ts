@@ -545,7 +545,42 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   }
 }
 
+/**
+ * Draw the violin. `mirror` puts the neck on the right (bow with the left
+ * hand): everything is laid out as usual and flipped, except the text.
+ */
 export function drawTouchViolin(
+  ctx: CanvasRenderingContext2D,
+  st: TouchViolinState,
+  t: DrawTargets,
+  showNames: boolean,
+  now: number,
+  mirror = false,
+) {
+  if (!mirror) return drawViolinSurface(ctx, st, t, showNames, now);
+  ctx.save();
+  ctx.translate(st.L.w, 0);
+  ctx.scale(-1, 1);
+  const plain = ctx.fillText;
+  ctx.fillText = function (this: CanvasRenderingContext2D, text: string, x: number, y: number) {
+    this.save();
+    this.translate(x, y);
+    this.scale(-1, 1);
+    const a = this.textAlign;
+    this.textAlign = a === 'left' ? 'right' : a === 'right' ? 'left' : a;
+    plain.call(this, text, 0, 0);
+    this.textAlign = a;
+    this.restore();
+  } as typeof ctx.fillText;
+  try {
+    drawViolinSurface(ctx, st, t, showNames, now);
+  } finally {
+    delete (ctx as unknown as { fillText?: unknown }).fillText;
+    ctx.restore();
+  }
+}
+
+function drawViolinSurface(
   ctx: CanvasRenderingContext2D,
   st: TouchViolinState,
   t: DrawTargets,
@@ -761,11 +796,11 @@ export function drawTouchViolin(
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.font = `800 22px ${FONT}`;
-      ctx.fillText('Left hand: press the strings on the neck', cx, cy - 6);
-      ctx.fillText('Right hand: drag along the violin to bow ↔', cx, cy + 26);
+      ctx.fillText('One hand: press the strings on the neck', cx, cy - 6);
+      ctx.fillText('Other hand: drag along the violin to bow ↔', cx, cy + 26);
       ctx.font = `700 16px ${FONT}`;
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText('Pull right for a down bow, push left for an up bow', cx, cy + 56);
+      ctx.fillText('Pull away from the neck for a down bow, push back for an up bow', cx, cy + 56);
     }
   }
   ctx.font = `700 12px ${FONT}`;

@@ -25,9 +25,10 @@ export function TouchViolinTab() {
       intro={
         <>
           <p className="muted">
-            No violin needed, great for the car. Hold the iPad sideways like a violin: your <b>left hand</b> presses the
-            strings on the neck, your <b>right hand</b> drags across the violin to bow. Pull right for a down bow, push
-            left for an up bow. Faster bowing plays louder.
+            No violin needed, great for the car. Hold the iPad sideways like a violin: one hand curls over the edge to press
+            the strings on the neck, the other drags along the violin to bow. Pull away from the neck for a down bow,
+            push back for an up bow. Faster bowing plays louder. In ⚙️ Options you can put the neck on either side
+            and either edge, and pick a smaller violin for smaller hands.
           </p>
           <div className="song-grid">
             <button className="song-card" onClick={() => setSong('free')}>
@@ -51,9 +52,11 @@ interface StoredOpts extends ViolinOptions {
   neckTop: boolean;
   /** violin size, e.g. '1/2' */
   size: string;
+  /** neck on the right, bow with the left hand */
+  neckRight: boolean;
 }
 function loadOpts(): StoredOpts {
-  const def: StoredOpts = { snap: true, easyBow: true, vibrato: true, names: false, big: false, neckTop: true, size: '4/4' };
+  const def: StoredOpts = { snap: true, easyBow: true, vibrato: true, names: false, big: false, neckTop: true, size: '4/4', neckRight: false };
   try {
     return { ...def, ...JSON.parse(localStorage.getItem(OPTS_KEY) || '{}') };
   } catch {
@@ -168,6 +171,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
       },
       opts.names,
       now,
+      opts.neckRight,
     );
   });
 
@@ -253,7 +257,7 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
         st.hold = { note: p, t0: now, last: now, expMs: p.beats * beatMs };
         if (snd.dir === p.bow.dir) st.bowRight++;
         if (snd.dir && snd.dir !== p.bow.dir)
-          say(p.bow.dir === 'down' ? 'That one is a pull → ⊓ (down bow)' : 'That one is a push ← V (up bow)', 'info');
+          say(p.bow.dir === 'down' ? 'That one is a pull ⊓ (down bow)' : 'That one is a push V (up bow)', 'info');
         else if (st.hits % 4 === 0) say(['Lovely! 🎻', 'Beautiful bowing ✨', 'Keep going! 🔥', 'You sound great! 🌟'][(st.hits / 4) % 4]);
         if (st.songBeat < p.beat) st.songBeat = Math.max(st.songBeat, p.beat - 0.1);
       }
@@ -299,6 +303,8 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
     const r = e.currentTarget.getBoundingClientRect();
     return [e.clientX - r.left, e.clientY - r.top] as const;
   };
+  // neck on the right: the violin is drawn mirrored, so mirror the touches too
+  const fx = (x: number) => (opts.neckRight ? vs.L.w - x : x);
   const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     unlockAudio();
@@ -309,14 +315,14 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
       /* ignore */
     }
     const [x, y] = pt(e);
-    vs.down(e.pointerId, x, y, e.timeStamp);
+    vs.down(e.pointerId, fx(x), y, e.timeStamp);
   };
   const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (demoing) return;
     const evs = e.nativeEvent.getCoalescedEvents?.() ?? [];
     const r = e.currentTarget.getBoundingClientRect();
-    if (evs.length > 1) for (const c of evs) vs.move(e.pointerId, c.clientX - r.left, c.clientY - r.top, c.timeStamp);
-    else vs.move(e.pointerId, e.clientX - r.left, e.clientY - r.top, e.timeStamp);
+    if (evs.length > 1) for (const c of evs) vs.move(e.pointerId, fx(c.clientX - r.left), c.clientY - r.top, c.timeStamp);
+    else vs.move(e.pointerId, fx(e.clientX - r.left), e.clientY - r.top, e.timeStamp);
   };
   const onUp = (e: React.PointerEvent<HTMLCanvasElement>) => vs.up(e.pointerId);
 
@@ -395,6 +401,12 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
                 <Toggle label="Easy bow" hint="The string your finger is on plays, wherever you bow" on={opts.easyBow} set={(v) => setOpt('easyBow', v)} />
                 <Toggle label="Vibrato" hint="A little wobble on long notes" on={opts.vibrato} set={(v) => setOpt('vibrato', v)} />
                 <Toggle label="Note names" on={opts.names} set={(v) => setOpt('names', v)} />
+                <Toggle
+                  label="Left-handed (neck on the right)"
+                  hint="Bow with your left hand, like a left-handed violin"
+                  on={opts.neckRight}
+                  set={(v) => setOpt('neckRight', v)}
+                />
                 <Toggle
                   label="Neck along the top edge"
                   hint="Fingers curl over the top of the iPad. Off: bottom edge"
