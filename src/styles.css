@@ -2183,3 +2183,78 @@ select option {
 .mv-lane { border: 2px dashed; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; font-weight: 800; pointer-events: none; }
 .mv-lane.on { border-style: solid; background: rgba(255,255,255,0.1); }
 .mv-arrow { font-size: 1.1rem; }
+/* violin tuner: bow / you're playing / turn */
+.tuner-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+.tstep {
+  border-radius: 16px;
+  padding: 10px 8px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid var(--panel-border);
+}
+.tstep.on {
+  border-color: rgba(82, 210, 115, 0.6);
+}
+.tstep-k {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tstep-big {
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1.2;
+  min-height: 1.2em;
+}
+.tstep-v {
+  font-size: 15px;
+  font-weight: 700;
+}
+.tstep.dir.up,
+.tstep.dir.down {
+  border-color: #ffd60a;
+  background: rgba(255, 214, 10, 0.12);
+}
+.tstep.dir.ok {
+  border-color: var(--good);
+  background: rgba(82, 210, 115, 0.15);
+}
+.bow-arrows {
+  display: inline-block;
+  font-size: 30px;
+  animation: bowmove 1.6s ease-in-out infinite alternate;
+}
+@keyframes bowmove {
+  from {
+    transform: translateX(-14px);
+  }
+  to {
+    transform: translateX(14px);
+  }
+}
+@media (max-width: 600px) {
+  .tuner-steps {
+    grid-template-columns: 1fr;
+  }
+  .tstep {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    text-align: left;
+  }
+  .tstep-k {
+    grid-column: 1;
+  }
+  .tstep-big {
+    grid-row: span 2;
+    grid-column: 2;
+    font-size: 30px;
+  }
+}

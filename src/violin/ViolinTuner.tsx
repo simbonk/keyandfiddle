@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { usePitchListener, usePitchState } from '../audio/hooks';
-import { centsBetween, freqToMidiFloat, midiToFreq } from '../audio/notes';
+import { centsBetween, freqToMidiFloat, midiName, midiToFreq } from '../audio/notes';
 import { playNote } from '../audio/synth';
 import { LevelMeter, MicGate } from '../ui/MicButton';
 import { STRINGS } from './theory';
@@ -24,7 +24,7 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
     });
     return Math.abs(STRINGS[best].midi - m) < 3.5 ? best : null;
   })();
-  const active = sel === 'auto' ? detectedString ?? 0 : sel;
+  const active = sel === 'auto' ? (detectedString ?? 0) : sel;
   const target = STRINGS[active];
 
   usePitchListener((f) => {
@@ -49,14 +49,21 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
   });
 
   const cents =
-    frame?.freq && Math.abs(centsBetween(frame.freq, midiToFreq(target.midi))) < 300 ? smoothed.current ?? 0 : null;
+    frame?.freq && Math.abs(centsBetween(frame.freq, midiToFreq(target.midi))) < 300 ? (smoothed.current ?? 0) : null;
   const angle = cents === null ? 0 : Math.max(-50, Math.min(50, cents)) * 1.6;
   const ok = cents !== null && Math.abs(cents) < IN_TUNE;
+
+  // what the child is playing right now, as a note name
+  const heardMidi = frame?.freq ? Math.round(freqToMidiFloat(frame.freq)) : null;
+  const otherString = detectedString !== null && detectedString !== active ? STRINGS[detectedString] : null;
+  const bowing = !!frame && frame.rms > 0.01;
+  const dir: 'up' | 'down' | 'ok' | null = cents === null ? null : ok ? 'ok' : cents < 0 ? 'up' : 'down';
 
   let advice = `Bow the ${target.name} string, ${target.nickname}. Use long, smooth bows.`;
   if (cents !== null) {
     if (ok) advice = 'Perfect! Keep it there ✨';
-    else if (cents < -50) advice = 'Too low. Turn the peg away from you (tighter) very slowly, or ask a grown-up to help.';
+    else if (cents < -50)
+      advice = 'Too low. Turn the peg away from you (tighter) very slowly, or ask a grown-up to help.';
     else if (cents < 0) advice = 'A little low. Turn the fine tuner clockwise ↻ a tiny bit.';
     else if (cents > 50) advice = 'Too high. Turn the peg toward you (looser) very slowly.';
     else advice = 'A little high. Turn the fine tuner anticlockwise ↺ a tiny bit.';
@@ -102,16 +109,71 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
                   />
                 );
               })}
-              <text x="-98" y="16" className="gauge-txt">low</text>
-              <text x="74" y="16" className="gauge-txt">high</text>
+              <text x="-98" y="16" className="gauge-txt">
+                low
+              </text>
+              <text x="74" y="16" className="gauge-txt">
+                high
+              </text>
               <g style={{ transform: `rotate(${angle}deg)`, transition: 'transform 120ms linear' }}>
-                <line x1="0" y1="0" x2="0" y2="-86" stroke={ok ? '#52d273' : cents === null ? '#888' : '#ffd60a'} strokeWidth="5" strokeLinecap="round" />
+                <line
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="-86"
+                  stroke={ok ? '#52d273' : cents === null ? '#888' : '#ffd60a'}
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                />
               </g>
               <circle r="9" fill="#fff" />
             </svg>
             <div className={`tuner-note ${ok ? 'ok' : ''}`} style={{ color: target.color }}>
               {target.name}
-              <span className="tuner-cents">{cents === null ? '' : `${cents > 0 ? '+' : ''}${Math.round(cents)}¢`}</span>
+              <span className="tuner-cents">
+                {cents === null ? '' : `${cents > 0 ? '+' : ''}${Math.round(cents)}¢`}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="tuner-steps">
+          <div className={`tstep ${bowing ? 'on' : ''}`}>
+            <div className="tstep-k">1 · Bow</div>
+            <div className="tstep-big">
+              <span className="bow-arrows">⟵ 🎻 ⟶</span>
+            </div>
+            <div className="tstep-v">
+              {bowing
+                ? `Good, keep bowing the ${target.name} string`
+                : `Bow the ${target.name} string with long, smooth bows`}
+            </div>
+          </div>
+          <div className="tstep">
+            <div className="tstep-k">2 · You're playing</div>
+            <div
+              className="tstep-big"
+              style={{ color: heardMidi !== null ? (ok ? 'var(--good)' : '#fff') : undefined }}
+            >
+              {heardMidi !== null ? midiName(heardMidi) : '—'}
+            </div>
+            <div className="tstep-v">
+              {otherString && sel !== 'auto'
+                ? `That sounds like the ${otherString.name} string. Aim for ${target.name}.`
+                : `Aim for ${midiName(target.midi)}`}
+            </div>
+          </div>
+          <div className={`tstep dir ${dir ?? ''}`}>
+            <div className="tstep-k">3 · Turn</div>
+            <div className="tstep-big">{dir === 'ok' ? '✅' : dir === 'up' ? '⬆️' : dir === 'down' ? '⬇️' : '…'}</div>
+            <div className="tstep-v">
+              {dir === 'ok'
+                ? 'In tune! Stop turning'
+                : dir === 'up'
+                  ? 'Too low: tune UP (tighten)'
+                  : dir === 'down'
+                    ? 'Too high: tune DOWN (loosen)'
+                    : 'Listening for your note…'}
             </div>
           </div>
         </div>
