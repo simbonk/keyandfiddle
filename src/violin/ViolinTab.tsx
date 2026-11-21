@@ -1,4 +1,5 @@
 import { TopBarSlot } from '../ui/chrome';
+import { MicBoostSelect } from '../ui/MicButton';
 import { useState } from 'react';
 import { ViolinLessons } from './ViolinLesson';
 import { ViolinTuner } from './ViolinTuner';
@@ -34,7 +35,8 @@ export function ViolinTab() {
         <>
           <div className="panel slim settings-row">
             <b>⚙️ Settings</b>
-            <span className="muted small">Tune your violin here before you play along with Songs.</span>
+            <MicBoostSelect />
+            <span className="muted small">Tune your violin below before you play along with Songs.</span>
           </div>
           <ViolinTuner onDone={() => setView('songs')} />
         </>
