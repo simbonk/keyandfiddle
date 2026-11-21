@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePitchListener, usePitchState } from '../audio/hooks';
 import { centsBetween, freqToMidiFloat, isBlackKey, midiName, midiToFreq } from '../audio/notes';
 import { playNote } from '../audio/synth';
 import { LevelMeter, MicGate } from '../ui/MicButton';
 import { Keyboard } from './Keyboard';
+import { type CapFrame, analyzeCapture } from './captureKey';
 import { type PianoCalibration, keyOffsetCents, saveCalibration } from './calibration';
 
 type Mode = 'quick' | 'full';
@@ -30,7 +31,8 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
   const [result, setResult] = useState<{ midi: number; freq: number; cents: number; level: number } | null>(null);
   const [mismatch, setMismatch] = useState<{ heard: number; freq: number } | null>(null);
   const levels = useRef<number[]>([]);
-  const capture = useRef<{ start: number; freqs: number[]; peak: number } | null>(null);
+  const frames = useRef<CapFrame[]>([]);
+  const stepStart = useRef(0);
   const frame = usePitchState(mode !== null);
 
   const keys = useMemo(() => (mode ? keysFor(mode, startMidi) : []), [mode, startMidi]);
@@ -39,36 +41,22 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
 
   usePitchListener((f) => {
     if (!mode || finished || result || mismatch) return;
-    const c = capture.current;
-    if (!c) {
-      if (f.onset) capture.current = { start: f.t, freqs: [], peak: f.rms };
-      return;
-    }
-    c.peak = Math.max(c.peak, f.rms);
-    // skip the noisy hammer attack, then collect ~0.45 s of sustained tone
-    if (f.t - c.start > 80 && f.freq) c.freqs.push(f.freq);
-    if (f.t - c.start > 600) {
-      capture.current = null;
-      if (c.freqs.length < 5) return; // too short, wait for another try
-      const sorted = [...c.freqs].sort((a, b) => a - b);
-      let freq = sorted[Math.floor(sorted.length / 2)];
-      // fold octave errors back towards the target key
-      let diff = freqToMidiFloat(freq) - target;
-      while (diff > 6) {
-        freq /= 2;
-        diff -= 12;
-      }
-      while (diff < -6) {
-        freq *= 2;
-        diff += 12;
-      }
-      if (Math.abs(diff) > 1.4) {
-        setMismatch({ heard: Math.round(freqToMidiFloat(freq)), freq });
-        return;
-      }
-      accept(freq, c.peak);
-    }
+    const buf = frames.current;
+    buf.push({ t: f.t, freq: f.freq, rms: f.rms });
+    while (buf.length && buf[0].t < f.t - 900) buf.shift();
+    const prev = keys[idx - 1];
+    const r = analyzeCapture(buf, target, prev !== undefined ? draft.keys[prev] ?? 0 : 0, stepStart.current, f.t);
+    if (!r) return;
+    frames.current = [];
+    if (r.kind === 'accept') accept(r.freq, r.peak);
+    else setMismatch({ heard: Math.round(freqToMidiFloat(r.freq)), freq: r.freq });
   }, mode !== null);
+
+  // each new key starts a fresh listening window
+  useEffect(() => {
+    stepStart.current = performance.now();
+    frames.current = [];
+  }, [idx, mode, mismatch]);
 
   function accept(freq: number, peak: number) {
     const cents = centsBetween(freq, midiToFreq(target));

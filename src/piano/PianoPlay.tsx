@@ -150,7 +150,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         (!touch && (Math.abs(n.midi - midi) === 12 || (freq > 0 && nearKey(cal, freq, n.midi)))),
     );
     if (!match) {
-      if (quietIfWrong) return null;
+      // stay quiet for soft sounds (people talking in the room), only flag real wrong keys
+      if (quietIfWrong || (!touch && level < cal.refLevel * 0.45)) return null;
       st.wrong++;
       st.streak = 0;
       say(`That was ${pitchClassName(midi)}. Look for ${pitchClassName(p.midi)} 👀`, 'warn');

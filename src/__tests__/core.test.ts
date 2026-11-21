@@ -139,3 +139,31 @@ describe('onset detection', () => {
     expect(onsets.length).toBeLessThanOrEqual(4);
   });
 });
+
+describe('tuning wizard capture', async () => {
+  const { analyzeCapture } = await import('../piano/captureKey');
+  const et = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
+  const run = (gen: (t: number) => number, prevFreq = 0, ms = 1500) => {
+    const frames: { t: number; freq: number; rms: number }[] = [];
+    for (let t = 0; t <= ms; t += 20) {
+      frames.push({ t, freq: gen(t), rms: 0.05 });
+      const r = analyzeCapture(frames, 71, prevFreq, 0, t);
+      if (r) return { ...r, t };
+    }
+    return null;
+  };
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const talk = () => (rnd() < 0.5 ? 0 : 110 + rnd() * 200); // random voice pitches
+  it('hears B4 through background talking, even with octave slips', () => {
+    const r = run((t) => (t < 500 ? talk() : t % 60 === 0 ? et(83) * 0.99 : rnd() < 0.3 ? talk() : et(71) * 0.99));
+    expect(r?.kind).toBe('accept');
+    expect(Math.abs(1200 * Math.log2(r!.kind === 'accept' ? r!.freq / (et(71) * 0.99) : 1))).toBeLessThan(5);
+  });
+  it('does not take the previous key still ringing as this key', () => {
+    expect(run(() => et(70), et(70))).toBeNull();
+  });
+  it('flags a clearly different key', () => {
+    expect(run(() => et(67))?.kind).toBe('mismatch');
+  });
+});
