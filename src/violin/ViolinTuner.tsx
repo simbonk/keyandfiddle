@@ -1,44 +1,67 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePitchListener, usePitchState } from '../audio/hooks';
 import { centsBetween, freqToMidiFloat, midiName, midiToFreq } from '../audio/notes';
-import { playNote } from '../audio/synth';
+import { ding, playNote } from '../audio/synth';
 import { LevelMeter, MicGate } from '../ui/MicButton';
 import { STRINGS } from './theory';
 
 const IN_TUNE = 6; // cents
 
 export function ViolinTuner({ onDone }: { onDone?: () => void }) {
-  const [sel, setSel] = useState<number | 'auto'>(0);
+  // Auto by default: the iPad sits on a stand, so it works out which string is being bowed.
+  const [sel, setSel] = useState<number | 'auto'>('auto');
+  const lastString = useRef<number | null>(null);
+  const [party, setParty] = useState<{ i: number; id: number; all: boolean } | null>(null);
+  const lastParty = useRef<{ i: number; t: number }>({ i: -1, t: 0 });
+  useEffect(() => {
+    if (!party) return;
+    const t = setTimeout(() => setParty(null), party.all ? 3200 : 2000);
+    return () => clearTimeout(t);
+  }, [party]);
   const [tuned, setTuned] = useState<boolean[]>([false, false, false, false]);
   const frame = usePitchState(true);
   const steadySince = useRef<number | null>(null);
   const smoothed = useRef<number | null>(null);
 
   // which string are we listening to?
+  // a bowed string is not always a perfectly clean tone, so accept a slightly rougher pitch too
+  const heardFreq = frame
+    ? frame.freq || (frame.rawFreq && frame.clarity >= 0.6 && frame.rms > 0.01 ? frame.rawFreq : 0)
+    : 0;
   const detectedString = (() => {
-    if (!frame?.freq) return null;
-    const m = freqToMidiFloat(frame.freq);
+    if (!heardFreq) return null;
+    const m = freqToMidiFloat(heardFreq);
     let best = 0;
     STRINGS.forEach((s, i) => {
       if (Math.abs(s.midi - m) < Math.abs(STRINGS[best].midi - m)) best = i;
     });
     return Math.abs(STRINGS[best].midi - m) < 3.5 ? best : null;
   })();
-  const active = sel === 'auto' ? (detectedString ?? 0) : sel;
+  if (detectedString !== null) lastString.current = detectedString;
+  // stay on the last string heard between bows, so the screen doesn't jump back to G
+  const active = sel === 'auto' ? (detectedString ?? lastString.current ?? 0) : sel;
   const target = STRINGS[active];
 
   usePitchListener((f) => {
-    if (!f.freq) {
+    const fq = f.freq || (f.rawFreq && f.clarity >= 0.6 && f.rms > 0.01 ? f.rawFreq : 0);
+    if (!fq) {
       steadySince.current = null;
       return;
     }
-    const c = centsBetween(f.freq, midiToFreq(target.midi));
+    const c = centsBetween(fq, midiToFreq(target.midi));
     if (Math.abs(c) > 300) return;
     smoothed.current = smoothed.current === null ? c : smoothed.current * 0.7 + c * 0.3;
     if (Math.abs(smoothed.current) < IN_TUNE) {
       if (steadySince.current === null) steadySince.current = f.t;
-      else if (f.t - steadySince.current > 900 && !tuned[active]) {
-        setTuned((t) => t.map((v, i) => (i === active ? true : v)));
+      else if (
+        f.t - steadySince.current > 900 &&
+        (!tuned[active] || (lastParty.current.i !== active && f.t - lastParty.current.t > 2500))
+      ) {
+        const nowTuned = tuned.map((v, i) => (i === active ? true : v));
+        setTuned(nowTuned);
+        lastParty.current = { i: active, t: f.t };
+        setParty({ i: active, id: f.t, all: nowTuned.every(Boolean) });
+        ding(true);
         // move on to the next untuned string automatically
         if (sel !== 'auto') {
           const next = [0, 1, 2, 3].find((i) => i !== active && !tuned[i]);
@@ -49,17 +72,23 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
   });
 
   const cents =
-    frame?.freq && Math.abs(centsBetween(frame.freq, midiToFreq(target.midi))) < 300 ? (smoothed.current ?? 0) : null;
+    heardFreq && Math.abs(centsBetween(heardFreq, midiToFreq(target.midi))) < 300 ? (smoothed.current ?? 0) : null;
   const angle = cents === null ? 0 : Math.max(-50, Math.min(50, cents)) * 1.6;
   const ok = cents !== null && Math.abs(cents) < IN_TUNE;
 
   // what the child is playing right now, as a note name
-  const heardMidi = frame?.freq ? Math.round(freqToMidiFloat(frame.freq)) : null;
+  const heardMidi = heardFreq ? Math.round(freqToMidiFloat(heardFreq)) : null;
   const otherString = detectedString !== null && detectedString !== active ? STRINGS[detectedString] : null;
   const bowing = !!frame && frame.rms > 0.01;
   const dir: 'up' | 'down' | 'ok' | null = cents === null ? null : ok ? 'ok' : cents < 0 ? 'up' : 'down';
 
-  let advice = `Bow the ${target.name} string, ${target.nickname}. Use long, smooth bows.`;
+  const nextUntuned = [0, 1, 2, 3].find((i) => !tuned[i]);
+  let advice =
+    sel === 'auto'
+      ? tuned.every(Boolean)
+        ? 'All four strings are in tune! 🎉'
+        : `Bow any string and I'll find it. ${nextUntuned !== undefined && tuned.some(Boolean) ? `Try the ${STRINGS[nextUntuned].name} string next.` : 'Start with the G string, the thickest one.'}`
+      : `Bow the ${target.name} string, ${target.nickname}. Use long, smooth bows.`;
   if (cents !== null) {
     if (ok) advice = 'Perfect! Keep it there ✨';
     else if (cents < -50)
@@ -72,6 +101,9 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
   return (
     <MicGate why="The tuner listens to your violin through the microphone.">
       <div className="panel tuner">
+        {party && (
+          <TunedParty key={party.id} name={STRINGS[party.i].name} color={STRINGS[party.i].color} all={party.all} />
+        )}
         <div className="row wrap center">
           {STRINGS.map((s, i) => (
             <button
@@ -236,5 +268,41 @@ export function ViolinStringsArt({ active }: { active: number }) {
         {STRINGS[active].name} string
       </text>
     </svg>
+  );
+}
+
+/** Confetti and a big "perfect!" when a string is in tune. */
+function TunedParty({ name, color, all }: { name: string; color: string; all: boolean }) {
+  const bits = Array.from({ length: all ? 60 : 32 }, (_, i) => {
+    const a = (i / (all ? 60 : 32)) * Math.PI * 2 + Math.random() * 0.4;
+    const d = 140 + Math.random() * (all ? 260 : 180);
+    return {
+      x: Math.cos(a) * d,
+      y: Math.sin(a) * d - 40,
+      r: Math.random() * 720 - 360,
+      c: ['#ffd60a', '#52d273', '#2ec4f1', '#ff4d6d', '#e056fd', '#ffffff'][i % 6],
+      delay: Math.random() * 0.12,
+    };
+  });
+  return (
+    <div className="tuned-party" aria-live="polite">
+      {bits.map((b, i) => (
+        <span
+          key={i}
+          className="confetti"
+          style={{
+            background: b.c,
+            ['--x' as string]: `${b.x}px`,
+            ['--y' as string]: `${b.y}px`,
+            ['--r' as string]: `${b.r}deg`,
+            animationDelay: `${b.delay}s`,
+          }}
+        />
+      ))}
+      <div className="tuned-badge" style={{ borderColor: color }}>
+        <div className="tuned-check">✓</div>
+        <div>{all ? 'All strings tuned! 🎉' : `${name} is perfect!`}</div>
+      </div>
+    </div>
   );
 }
