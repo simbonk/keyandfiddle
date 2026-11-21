@@ -1,3 +1,34 @@
-# Key & Fiddle
+# Key & Fiddle 🎹🎻
 
-Music-learning web app for kids (piano + violin).
+A music-learning web app for kids, built for iPad first (works on phones and desktop too). Everything runs in the browser: the microphone listens to the real instrument and the camera acts as a magic mirror for violin posture. Audio and video never leave the device.
+
+## Tabs
+
+### 🎹 Piano
+- **Tune to my piano**: a wizard asks you to press keys one by one and remembers the exact pitch *your* piano makes, so an old, out-of-tune piano still works. Quick mode (5 keys, the rest interpolated) or every key. You can re-run it any time.
+- **Play songs**: a 3D note highway (Guitar Hero style) that lines up with a 2-octave on-screen keyboard. Modes are *Wait for me* (notes stop until you play the right key), *Play along* (keeps tempo) and *Listen* (demo). It gives feedback on loud and soft notes (brighter blocks mean louder) and on holding long notes, and shows a "coming up" list. You can also tap the on-screen keys.
+- **Record**: play a melody and it is transcribed into notes you can replay, rename, save, or turn into a highway song ("Learn it").
+
+### 🎻 Violin
+- **Tune**: a per-string tuner (G D A E) with a needle, a reference tone and peg or fine-tuner advice.
+- **Magic mirror**: the selfie camera with MediaPipe hand and pose tracking. It estimates where the violin and bow are, overlays a violin with string lanes, finger targets and a ghost "ideal" bow, and runs posture checks (shoulders, chin, scroll height, elbow, wrist, bow angle and contact point). *Pin my violin* lets you tap the chinrest and scroll to anchor the overlay to your body.
+- **Play tunes**: a two-track highway. The left track shows string and finger and the right track shows bow direction and which part of the bow to use. The mirror shows the same targets on your violin, and pitch detection confirms each note, including whether it was in tune.
+
+## Development
+
+```bash
+npm install
+npm run dev        # http://localhost:5173 (use --host to try it on an iPad on the same Wi-Fi; camera/mic need HTTPS there)
+npm test           # unit tests (pitch detection, fingering, calibration, songs)
+npm run build
+```
+
+Add `?arDemo` to the URL to preview the AR overlays with a synthetic player, so no camera or violin is needed.
+
+## Deploying (Vercel)
+
+Import the repo in Vercel. `vercel.json` sets the Vite build. The MediaPipe WASM runtime is copied from `node_modules` into `public/mediapipe` at build time, and the tracking models load from Google's MediaPipe model bucket.
+
+## Stack
+
+Vite, React and TypeScript. The Web Audio API handles pitch detection (McLeod pitch method) and a small synth. Canvas 2D draws the highways and AR overlays. `@mediapipe/tasks-vision` provides hand and pose landmarks.
