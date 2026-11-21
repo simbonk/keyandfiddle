@@ -48,10 +48,10 @@ describe('touch violin input', () => {
     const L = v.L;
     expect(L.stringY(0, L.nutX)).toBeLessThan(L.stringY(3, L.nutX));
     expect(L.stringY(0, L.nutX)).toBeLessThan(30);
-    v.down(2, L.padLaneX(1), 400, 0);
+    v.down(2, L.laneX(1, 400), 400, 0);
     let t = 0;
     for (let i = 0; i < 15; i++) {
-      v.move(2, L.padLaneX(1), 400 - i * 5, (t += 16)); // toward the edge = up bow
+      v.move(2, L.laneX(1, 400 - i * 5), 400 - i * 5, (t += 16)); // toward the edge = up bow
       v.frame(t, 0.016);
     }
     expect(v.sounding()?.string).toBe(1);
@@ -68,11 +68,11 @@ describe('touch violin input', () => {
     const v = mk();
     const L = v.L;
     v.down(1, L.semisX(2), L.stringY(0, L.semisX(2)), 0); // B on G string... semis 2 = A3
-    v.down(2, L.padLaneX(3), 300, 0); // bow in the E string's lane
+    v.down(2, L.laneX(3, 300), 300, 0); // bow in the E string's lane
     let t = 0;
     for (let i = 0; i < 20; i++) {
       t += 16;
-      v.move(2, L.padLaneX(3), 300 + i * 4, t); // away from the top edge = down bow
+      v.move(2, L.laneX(3, 300 + i * 4), 300 + i * 4, t); // away from the top edge = down bow
       v.frame(t, 0.016);
     }
     const s = v.sounding();
@@ -86,12 +86,12 @@ describe('touch violin input', () => {
   it('a bow change starts a new stroke', () => {
     const v = mk();
     const L = v.L;
-    v.down(2, L.padLaneX(2), 300, 0);
+    v.down(2, L.laneX(2, 300), 300, 0);
     const s0 = v.strokeId;
     let t = 0;
-    for (let i = 0; i < 10; i++) v.move(2, L.padLaneX(2), 300 + i * 10, (t += 16));
+    for (let i = 0; i < 10; i++) v.move(2, L.laneX(2, 300 + i * 10), 300 + i * 10, (t += 16));
     const s1 = v.strokeId;
-    for (let i = 0; i < 10; i++) v.move(2, L.padLaneX(2), 390 - i * 10, (t += 16));
+    for (let i = 0; i < 10; i++) v.move(2, L.laneX(2, 390 - i * 10), 390 - i * 10, (t += 16));
     expect(v.strokeId).toBeGreaterThan(s1);
     expect(s1).toBeGreaterThanOrEqual(s0);
   });

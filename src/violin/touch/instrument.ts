@@ -64,8 +64,15 @@ export interface Layout {
   semisX: (semis: number) => number;
   xToSemis: (x: number) => number;
   neckString: (x: number, y: number) => number;
-  padString: (x: number) => number;
-  padLaneX: (s: number) => number;
+  /** which bow lane a touch in the bow area is in */
+  padString: (x: number, y: number) => number;
+  /** x of a bow lane's centre line (s may be fractional, for lane edges) at height y */
+  laneX: (s: number, y: number) => number;
+  /** unit vector of a down bow in lane s (away from the edge, along the lane) */
+  laneDir: (s: number) => { x: number; y: number };
+  /** where the bow lanes start (just past the strings) and end */
+  laneY0: number;
+  laneY1: number;
   spacing: (x: number) => number;
 }
 
@@ -133,6 +140,32 @@ export function violinLayout(w: number, h: number, mm: number, big = false, top 
     for (let s = 1; s < 4; s++) if (Math.abs(stringY(s, x) - y) < Math.abs(stringY(best, x) - y)) best = s;
     return best;
   };
+  // Bow lanes fan out like a real bow arm: the bow leans a little more for
+  // each lower string (E straight across, G tilted the most toward the neck).
+  const laneY0 = gY + e * (3 * padSp + 12);
+  const laneY1 = top ? h - 8 : 8;
+  const FT = [0.5, 0.64, 0.77, 0.88]; // lane centres where the bow meets the strings
+  const FB = [0.06, 0.33, 0.6, 0.88]; // ... and at the far end of the screen
+  const fracOf = (arr: number[], sf: number) => {
+    const i = Math.max(0, Math.min(2, Math.floor(sf)));
+    return arr[i] + (arr[i + 1] - arr[i]) * (sf - i);
+  };
+  const laneX = (sf: number, y: number) => {
+    const t = (y - laneY0) / (laneY1 - laneY0);
+    return padX + pad.w * (fracOf(FT, sf) + (fracOf(FB, sf) - fracOf(FT, sf)) * t);
+  };
+  const laneDir = (st: number) => {
+    const dx = laneX(st, laneY1) - laneX(st, laneY0);
+    const dy = laneY1 - laneY0;
+    const n = Math.hypot(dx, dy) || 1;
+    return { x: dx / n, y: dy / n };
+  };
+  const padString = (x: number, y: number) => {
+    const yy = top ? Math.max(laneY0, y) : Math.min(laneY0, y);
+    let best = 0;
+    for (let st = 1; st < 4; st++) if (Math.abs(laneX(st, yy) - x) < Math.abs(laneX(best, yy) - x)) best = st;
+    return best;
+  };
   const yc = gY + e * 1.5 * spacing(fbEnd);
   const neckHalf = 1.5 * spacing(fbEnd) + 4 * wm;
   const farString = gY + e * 3 * Math.max(padSp, spacing(fbEnd));
@@ -156,9 +189,11 @@ export function violinLayout(w: number, h: number, mm: number, big = false, top 
     semisX,
     xToSemis,
     neckString: (x, y) => nearest(y, Math.max(nutX, Math.min(fbEnd, x))),
-    // in the bow column, which string the bow leans on: G nearest the neck
-    padString: (x) => Math.max(0, Math.min(3, Math.floor(((x - padX) / pad.w) * 4))),
-    padLaneX: (st) => padX + ((st + 0.5) / 4) * pad.w,
+    padString,
+    laneX,
+    laneDir,
+    laneY0,
+    laneY1,
     spacing,
   };
 }
@@ -250,8 +285,9 @@ export class TouchViolinState {
     const b = this.bow;
     if (!b || b.id !== id) return;
     const dt = Math.max(1, t - b.lastT);
-    // the bow moves across the strings: toward / away from the edge
-    const dy = (y - b.y) * this.L.d;
+    // the bow moves across the strings, along the lane it's in
+    const u = this.L.laneDir(this.L.padString(x, y));
+    const dy = (x - b.x) * u.x + (y - b.y) * u.y;
     const inst = (dy / dt) * 1000;
     b.speed += (inst - b.speed) * Math.min(1, dt / 45);
     // about 25 cm of travel from frog to tip (a little short of a real bow)
@@ -308,7 +344,7 @@ export class TouchViolinState {
         if ((f.semis > 0 || f.x < this.L.nutX) && (!last || f.t > last.t)) last = f;
       if (last) return last.s;
     }
-    return this.L.padString(this.bow.x);
+    return this.L.padString(this.bow.x, this.bow.y);
   }
 
   /** What the player is sounding right now (null if the bow is still or off). */
@@ -417,11 +453,13 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 const TAPES: [number, string][] = [
-  [2, '1'],
-  [4, '2'],
-  [5, '3'],
-  [7, '4'],
+  [2, '1 pointer'],
+  [4, '2 middle'],
+  [5, '3 ring'],
+  [7, '4 pinky'],
 ];
+/** Violin finger numbers (left hand, thumb not counted; piano counts the thumb as 1). */
+const FINGER_NAMES = ['', 'pointer', 'middle', 'ring', 'pinky'];
 const FONT = '"Baloo 2", system-ui';
 
 /** Width of the falling lane for a finger spot. */
@@ -451,21 +489,13 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
     ctx.lineTo(L.semisX(s), strike);
     ctx.stroke();
   }
-  // bow column lanes: which string the bow leans on
-  for (let st = 1; st < 4; st++) {
-    const x = L.pad.x + (st / 4) * L.pad.w;
-    ctx.beginPath();
-    ctx.moveTo(x, far);
-    ctx.lineTo(x, strike);
-    ctx.stroke();
-  }
   // beat lines
   ctx.strokeStyle = 'rgba(255,255,255,0.05)';
   for (let b = Math.ceil(f.songBeat); b < f.songBeat + f.visibleBeats; b++) {
     const y = yAt(b - f.songBeat);
     ctx.beginPath();
     ctx.moveTo(L.x0, y);
-    ctx.lineTo(L.w - 8, y);
+    ctx.lineTo(L.fbEnd, y);
     ctx.stroke();
   }
   // landing line
@@ -523,33 +553,38 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
       ctx.textBaseline = 'alphabetic';
     }
 
-    // ---- bow gem, in the bow column lane of its string ----
+    // ---- bow sign on the gem: orange ⊓ = down bow, blue V = up bow ----
     const down = n.bow.dir === 'down';
-    const lw = L.pad.w / 4;
-    const bx = L.padLaneX(n.fing.string);
-    ctx.fillStyle = down ? DOWN : UP;
-    roundRect(ctx, bx - lw * 0.42, gy, lw * 0.84, gh, 10);
-    ctx.fill();
-    if (isCur) {
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#fff';
-      ctx.stroke();
-    }
-    // arrow: a down bow pulls away from the edge, an up bow pushes back toward it
-    const ad = down ? d : -d;
-    const len = Math.min(gh - 12, 40);
-    if (len > 10) {
-      const ym = gy + gh / 2;
-      ctx.strokeStyle = '#10082a';
-      ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
+    if (gh > r * 6 + 16) {
+      const by = cy + d * (r * 4 + 8);
       ctx.beginPath();
-      ctx.moveTo(bx, ym - (ad * len) / 2);
-      ctx.lineTo(bx, ym + (ad * len) / 2);
-      ctx.moveTo(bx - 8, ym + (ad * len) / 2 - ad * 9);
-      ctx.lineTo(bx, ym + (ad * len) / 2);
-      ctx.lineTo(bx + 8, ym + (ad * len) / 2 - ad * 9);
+      ctx.arc(x, by, r, 0, Math.PI * 2);
+      ctx.fillStyle = down ? DOWN : UP;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#10082a';
       ctx.stroke();
+      ctx.fillStyle = '#10082a';
+      ctx.font = `800 ${Math.round(r * 1.1)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(down ? '⊓' : 'V', x, by + 1);
+      ctx.textBaseline = 'alphabetic';
+    }
+    // the next note: a moving dotted line from the gem to the spot to press
+    if (isCur && n.state !== 'hit') {
+      const ty = L.stringY(n.fing.string, Math.max(L.nutX, x));
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 8]);
+      ctx.lineDashOffset = (-now / 25) * d;
+      ctx.beginPath();
+      ctx.moveTo(x, y0);
+      ctx.lineTo(x, ty);
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
@@ -619,18 +654,29 @@ function drawViolinSurface(
   ctx.fillStyle = bg;
   roundRect(ctx, pad.x, 2, pad.w, L.h - 4, 22);
   ctx.fill();
-  // lanes: lean the bow toward a string by bowing in its lane
+  // lanes, fanned like a bow arm: lean the bow toward a string by bowing in its lane
+  ctx.save();
+  roundRect(ctx, pad.x, 2, pad.w, L.h - 4, 22);
+  ctx.clip();
+  const tgtLane = t.target?.string ?? null;
   for (let s = 0; s < 4; s++) {
-    const x = L.padLaneX(s);
     const active = st.activeString === s && !!st.bow;
-    ctx.fillStyle = active ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
-    roundRect(ctx, x - pad.w / 8 + 3, 6, pad.w / 4 - 6, L.h - 12, 14);
+    const wanted = tgtLane === s;
+    lanePath(ctx, L, s, 0.47);
+    ctx.fillStyle = active ? 'rgba(255,255,255,0.18)' : wanted ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.16)';
     ctx.fill();
+    ctx.strokeStyle = STRINGS[s].color;
+    ctx.globalAlpha = active || wanted ? 0.9 : 0.35;
+    ctx.lineWidth = active || wanted ? 3 : 1.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    const ly = L.top ? L.h - 18 : 32;
     ctx.fillStyle = STRINGS[s].color;
-    ctx.font = `800 18px ${FONT}`;
+    ctx.font = `800 20px ${FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillText(STRINGS[s].name, x, L.top ? L.h - 16 : 30);
+    ctx.fillText(STRINGS[s].name, L.laneX(s, ly), ly);
   }
+  ctx.restore();
   // bridge at the far end of the strings
   const brX = pad.x + pad.w - 6;
   const padTop = L.stringY(0, pad.x) - e * 10;
@@ -677,7 +723,11 @@ function drawViolinSurface(
       ctx.fillStyle = 'rgba(242,227,196,0.9)';
       ctx.font = `800 13px ${FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillText(label, x, y1 + e * 14 + (e > 0 ? 0 : 4));
+      const [num, name] = label.split(' ');
+      const ly = y1 + e * 14 + (e > 0 ? 0 : 4);
+      ctx.fillText(num, x, ly);
+      ctx.font = `700 11px ${FONT}`;
+      ctx.fillText(name, x, ly + e * 13);
     }
   }
 
@@ -726,50 +776,66 @@ function drawViolinSurface(
   // ---- target: finger spot and bow lane ----
   const tgt = t.target;
   if (tgt) {
-    const pulse = 1 + 0.15 * Math.sin(now / 160);
-    if (tgt.semis === 0) {
-      const y = L.stringY(tgt.string, L.nutX);
-      ctx.strokeStyle = STRINGS[tgt.string].color;
-      ctx.lineWidth = 3;
-      roundRect(ctx, L.x0 + 2, y - sp0 * 0.5 * pulse, L.nutX - L.x0 - 4, sp0 * pulse, sp0 * 0.5);
-      ctx.stroke();
-    } else {
-      const x = L.semisX(tgt.semis);
-      const y = L.stringY(tgt.string, x);
-      const r = L.spacing(x) * 0.75 * pulse;
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = FINGER_COLORS[tgt.finger];
-      ctx.globalAlpha = 0.45;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    // the lane to bow in, with a big arrow
-    const lx = L.padLaneX(tgt.string);
-    const lw = pad.w / 4;
-    const y0 = L.stringY(3, pad.x) + e * 24;
-    const y1 = L.top ? L.h - 36 : 36;
-    ctx.globalAlpha = 0.3 + 0.15 * Math.sin(now / 180);
-    ctx.fillStyle = tgt.bow.dir === 'down' ? DOWN : UP;
-    roundRect(ctx, lx - lw / 2 + 3, Math.min(y0, y1), lw - 6, Math.abs(y1 - y0), 14);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    const ad = (tgt.bow.dir === 'down' ? 1 : -1) * e;
-    const ym = (y0 + y1) / 2;
-    const len = Math.min(140, Math.abs(y1 - y0) * 0.6);
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 6;
+    const col = STRINGS[tgt.string].color;
+    // the whole string to play glows
+    ctx.save();
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.25 + 0.15 * Math.sin(now / 200);
+    ctx.lineWidth = 10;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(lx, ym - (ad * len) / 2);
-    ctx.lineTo(lx, ym + (ad * len) / 2);
-    ctx.moveTo(lx - 14, ym + (ad * len) / 2 - ad * 16);
-    ctx.lineTo(lx, ym + (ad * len) / 2);
-    ctx.lineTo(lx + 14, ym + (ad * len) / 2 - ad * 16);
+    ctx.moveTo(L.nutX, L.stringY(tgt.string, L.nutX));
+    ctx.lineTo(L.fbEnd, L.stringY(tgt.string, L.fbEnd));
+    ctx.lineTo(pad.x, L.stringY(tgt.string, pad.x));
     ctx.stroke();
+    ctx.restore();
+    const x = tgt.semis === 0 ? L.openX : L.semisX(tgt.semis);
+    const y = L.stringY(tgt.string, Math.max(L.nutX, x));
+    const r = Math.max(22, L.spacing(x) * 1.15);
+    // ripples spreading out from the spot
+    for (let k = 0; k < 2; k++) {
+      const ph = ((now / 900 + k / 2) % 1);
+      ctx.globalAlpha = 0.7 * (1 - ph);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, r * (0.9 + ph * 1.3), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // the spot itself: finger colour with the finger number, big
+    const fillCol = tgt.finger === 0 ? '#10082a' : FINGER_COLORS[tgt.finger];
+    ctx.beginPath();
+    ctx.arc(x, y, r * (1 + 0.08 * Math.sin(now / 150)), 0, Math.PI * 2);
+    ctx.fillStyle = fillCol;
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = col;
+    ctx.stroke();
+    ctx.fillStyle = tgt.finger === 0 ? '#fff' : '#10082a';
+    ctx.font = `800 ${Math.round(r * 1.1)}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(tgt.finger === 0 ? '0' : String(tgt.finger), x, y + 2);
+    ctx.textBaseline = 'alphabetic';
+    // a label just past the neck saying it in words
+    const label =
+      tgt.finger === 0
+        ? `open ${STRINGS[tgt.string].name}: no finger`
+        : `${FINGER_NAMES[tgt.finger]} finger (${tgt.finger}) on ${STRINGS[tgt.string].name}`;
+    ctx.font = `800 18px ${FONT}`;
+    const tw = ctx.measureText(label).width + 24;
+    const ly = edgeIn(Math.max(L.nutX, x), L.spacing(x)) + e * 30;
+    const lx = Math.max(L.x0 + tw / 2, x);
+    ctx.fillStyle = col;
+    roundRect(ctx, lx - tw / 2, ly - 16, tw, 30, 15);
+    ctx.fill();
+    ctx.fillStyle = '#10082a';
+    ctx.fillText(label, lx, ly + 5);
+    // the lane to bow in: arrows marching the way to bow
+    drawLaneArrows(ctx, L, tgt.string, tgt.bow.dir, now, 1);
   }
 
   // ---- demo ghost hand ----
@@ -782,7 +848,7 @@ function drawViolinSurface(
       ctx.arc(x, L.stringY(g.string, x), L.spacing(x) * 0.6, 0, Math.PI * 2);
       ctx.fill();
     }
-    drawBowStick(ctx, L, L.padLaneX(g.string), g.bowPos, g.string, g.dir, 0.75);
+    drawBowStick(ctx, L, g.bowPos, g.string, g.dir, 0.75);
   }
 
   // ---- the player's fingers ----
@@ -810,8 +876,8 @@ function drawViolinSurface(
 
   // ---- the player's bow ----
   if (st.bow) {
-    const s = st.activeString ?? L.padString(st.bow.x);
-    drawBowStick(ctx, L, L.padLaneX(s), st.bow.pos, s, st.lastDir, 1);
+    const s = st.activeString ?? L.padString(st.bow.x, st.bow.y);
+    drawBowStick(ctx, L, st.bow.pos, s, st.lastDir, 1);
   }
 
   // ---- free play: what you're playing, big ----
@@ -839,45 +905,110 @@ function drawViolinSurface(
   }
 }
 
+/** Outline of bow lane s (half = half-width in lanes). */
+function lanePath(ctx: CanvasRenderingContext2D, L: Layout, s: number, half: number) {
+  const y0 = L.laneY0;
+  const y1 = L.laneY1;
+  ctx.beginPath();
+  ctx.moveTo(L.laneX(s - half, y0), y0);
+  ctx.lineTo(L.laneX(s + half, y0), y0);
+  ctx.lineTo(L.laneX(s + half, y1), y1);
+  ctx.lineTo(L.laneX(s - half, y1), y1);
+  ctx.closePath();
+}
+
+/** Big chevrons marching along a lane in the direction to bow. */
+function drawLaneArrows(ctx: CanvasRenderingContext2D, L: Layout, s: number, dir: BowDir, now: number, alpha: number) {
+  const u = L.laneDir(s);
+  const sgn = dir === 'down' ? 1 : -1;
+  const ux = u.x * sgn;
+  const uy = u.y * sgn;
+  const total = Math.abs(L.laneY1 - L.laneY0) / Math.abs(u.y);
+  const gap = 70;
+  const off = ((now / 6) % gap) * 1;
+  const col = dir === 'down' ? DOWN : UP;
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.35;
+  lanePath(ctx, L, s, 0.47);
+  ctx.fillStyle = col;
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let k = 0; k * gap < total; k++) {
+    // distance along the lane from where the stroke starts
+    const dist = (k * gap + off) % total;
+    const along = sgn > 0 ? dist : total - dist;
+    const cxp = L.laneX(s, L.laneY0) + u.x * along;
+    const cyp = L.laneY0 + u.y * along;
+    const fade = Math.min(1, dist / 60, (total - dist) / 60);
+    ctx.globalAlpha = alpha * Math.max(0, fade);
+    const w = 20;
+    const hx = -uy;
+    const hy = ux; // perpendicular
+    ctx.beginPath();
+    ctx.moveTo(cxp - ux * 14 + hx * w, cyp - uy * 14 + hy * w);
+    ctx.lineTo(cxp + ux * 6, cyp + uy * 6);
+    ctx.lineTo(cxp - ux * 14 - hx * w, cyp - uy * 14 - hy * w);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#fff';
+  ctx.font = `800 18px ${FONT}`;
+  ctx.textAlign = 'center';
+  const my = (L.laneY0 + L.laneY1) / 2;
+  const label = dir === 'down' ? '⊓ down bow' : 'V up bow';
+  ctx.fillStyle = 'rgba(16,8,42,0.75)';
+  const mx = Math.max(L.pad.x + 60, Math.min(L.pad.x + L.pad.w - 60, L.laneX(s, my)));
+  roundRect(ctx, mx - 56, my - 18, 112, 28, 14);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillText(label, mx, my + 3);
+  ctx.restore();
+}
+
 /**
- * The bow, seen from above: its hair crosses the strings at a right angle in
- * the lane of the string it leans on, and slides along its own length as you
- * bow (pos 0 = playing at the frog, 1 = at the tip).
+ * The bow, seen from above: it lies along the lane of the string it leans
+ * on, across the strings, and slides along its own length as you bow
+ * (pos 0 = playing at the frog, 1 = at the tip).
  */
-function drawBowStick(
-  ctx: CanvasRenderingContext2D,
-  L: Layout,
-  x: number,
-  pos: number,
-  s: number,
-  dir: BowDir | null,
-  alpha: number,
-) {
-  const e = L.d;
-  const contact = L.stringY(s, L.pad.x);
-  const len = L.mm * 250; // drawn bow length (the column only shows part of it)
-  // at the frog the frog end sits just past the strings; at the tip it has slid past
-  const frogY = contact + e * (40 + pos * len);
-  const tipY = frogY - e * len;
-  const yA = Math.max(0, Math.min(L.h, Math.min(frogY, tipY)));
-  const yB = Math.max(0, Math.min(L.h, Math.max(frogY, tipY)));
+function drawBowStick(ctx: CanvasRenderingContext2D, L: Layout, pos: number, s: number, dir: BowDir | null, alpha: number) {
+  const u = L.laneDir(s);
+  const cy = L.stringY(s, L.pad.x);
+  // where the lane's line meets the string
+  const cx = L.laneX(s, L.laneY0) - (u.x / u.y) * (L.laneY0 - cy);
+  const len = L.mm * 250;
+  const frogD = 40 + pos * len; // frog distance from the contact, along the lane
+  const fx = cx + u.x * frogD;
+  const fy = cy + u.y * frogD;
+  const tx = fx - u.x * len;
+  const ty = fy - u.y * len;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#4a2208';
-  roundRect(ctx, x + 6, yA, 5, yB - yA, 2.5);
+  ctx.lineCap = 'round';
+  // stick a little to the side, hair on the strings
+  ctx.strokeStyle = '#4a2208';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(tx + u.y * 9, ty - u.x * 9);
+  ctx.lineTo(fx + u.y * 9, fy - u.x * 9);
+  ctx.stroke();
+  ctx.strokeStyle = '#f4ecdc';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(fx, fy);
+  ctx.stroke();
+  // frog (the end you hold)
+  ctx.fillStyle = '#1a0c03';
+  ctx.beginPath();
+  ctx.arc(fx + u.y * 4, fy - u.x * 4, 12, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#f4ecdc';
-  roundRect(ctx, x - 4, yA, 9, yB - yA, 3);
-  ctx.fill();
-  // frog (the end you hold), when it's on screen
-  if (frogY > 0 && frogY < L.h) {
-    ctx.fillStyle = '#1a0c03';
-    roundRect(ctx, x - 7, frogY - 12, 20, 24, 5);
-    ctx.fill();
-  }
   ctx.fillStyle = dir === 'down' ? DOWN : dir === 'up' ? UP : '#fff';
   ctx.beginPath();
-  ctx.arc(x, contact, 7, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 8, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
