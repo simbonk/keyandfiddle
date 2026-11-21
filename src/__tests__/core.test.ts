@@ -41,7 +41,7 @@ describe('songs', () => {
     const byId = (id: string) => PIANO_SONGS.find((s) => s.id === id)!;
     expect(songRange(byId('mary'), 48)).toEqual([48, 72]);
     expect(songRange(byId('canon-d'), 48)).toEqual([36, 84]);
-    expect(songRange(byId('minuet-g'), 48)).toEqual([48, 84]);
+    expect(songRange(byId('minuet-g'), 48)).toEqual([36, 84]);
   });
   it('parses chords and rests', () => {
     const n = parseSong('C4:1 R:1 E4:2+C3:2:L');

@@ -1,4 +1,5 @@
 import { parseSong, type SongNote } from '../audio/notes';
+import { JB_CHORUS, JB_VERSE_A, ODE } from '../piano/songs';
 
 // ---------------------------------------------------------------- range
 
@@ -153,20 +154,13 @@ export const VOICE_SONGS: VoiceSong[] = [
     '🛷',
     112,
     2,
-    `E4:1 E4:1 E4:2 | E4:1 E4:1 E4:2 | E4:1 G4:1 C4:1.5 D4:0.5 | E4:4 |
-     F4:1 F4:1 F4:1.5 F4:0.5 | F4:1 E4:1 E4:1 E4:0.5 E4:0.5 | E4:1 D4:1 D4:1 E4:1 | D4:2 G4:2`,
-    `Jin- gle bells, jin- gle bells, jin- gle all the way! Oh what fun it is to ride in a one- horse o- pen sleigh, hey!`,
+    JB_VERSE_A + ' ' + JB_CHORUS,
+    `Dash- ing through the snow, in a one- horse o- pen sleigh, o'er the fields we go, laugh- ing all the way.
+     Bells on bob- tail ring, mak- ing spir- its bright, what fun it is to ride and sing a sleigh- ing song to- night! Oh,
+     Jin- gle bells, jin- gle bells, jin- gle all the way! Oh what fun it is to ride in a one- horse o- pen sleigh, hey!
+     Jin- gle bells, jin- gle bells, jin- gle all the way! Oh what fun it is to ride in a one- horse o- pen sleigh!`,
   ),
-  song(
-    'v-ode',
-    'Ode to Joy',
-    '🎉',
-    96,
-    3,
-    `E4:1 E4:1 F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | E4:1.5 D4:0.5 D4:2 |
-     E4:1 E4:1 F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | D4:1.5 C4:0.5 C4:2`,
-    `La la la la la la la la la la la la la la la. La la la la la la la la la la la la la la la.`,
-  ),
+  song('v-ode', 'Ode to Joy', '🎉', 96, 3, ODE, Array(62).fill('La').join(' ')),
   song(
     'v-scale-song',
     'Do-Re-Mi Ladder',

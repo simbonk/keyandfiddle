@@ -1,3 +1,4 @@
+import { CANON_VARS, GS_A, GS_B, MINUET_A, MINUET_B, ODE } from '../piano/songs';
 // Violin facts: strings, first-position fingering, bowing plan.
 import { parseSong, type Song, type SongNote } from '../audio/notes';
 
@@ -112,6 +113,13 @@ export function planBowing(notes: SongNote[]): ViolinNote[] {
   return out;
 }
 
+/** Right-hand melody of a piano arrangement (left hand removed), optionally transposed. */
+function melodyOf(src: string, shift = 0): SongNote[] {
+  return parseSong(src)
+    .filter((n) => !n.tag?.includes('L'))
+    .map((n) => ({ midi: n.midi! + shift, beat: n.beat, beats: n.beats }));
+}
+
 // All melodies traditional / public domain, arranged for first position.
 export const VIOLIN_SONGS: Song[] = [
   {
@@ -177,7 +185,9 @@ export const VIOLIN_SONGS: Song[] = [
     bpm: 88,
     level: 2,
     notes: parseSong(`E5:1 C#5:1 C#5:2 | D5:1 B4:1 B4:2 | A4:1 B4:1 C#5:1 D5:1 | E5:1 E5:1 E5:2 |
-      E5:1 C#5:1 C#5:2 | D5:1 B4:1 B4:2 | A4:1 C#5:1 E5:1 E5:1 | C#5:4`),
+      E5:1 C#5:1 C#5:2 | D5:1 B4:1 B4:2 | A4:1 C#5:1 E5:1 E5:1 | C#5:4 |
+      B4:1 B4:1 B4:1 B4:1 | B4:1 C#5:1 D5:2 | C#5:1 C#5:1 C#5:1 C#5:1 | C#5:1 D5:1 E5:2 |
+      E5:1 C#5:1 C#5:2 | D5:1 B4:1 B4:2 | A4:1 C#5:1 E5:1 E5:1 | A4:4`),
   },
   {
     id: 'ode-v',
@@ -185,18 +195,17 @@ export const VIOLIN_SONGS: Song[] = [
     emoji: '🎉',
     bpm: 84,
     level: 3,
-    blurb: 'On the D and A strings.',
-    notes: parseSong(`F#4:1 F#4:1 G4:1 A4:1 | A4:1 G4:1 F#4:1 E4:1 | D4:1 D4:1 E4:1 F#4:1 | F#4:1.5 E4:0.5 E4:2 |
-      F#4:1 F#4:1 G4:1 A4:1 | A4:1 G4:1 F#4:1 E4:1 | D4:1 D4:1 E4:1 F#4:1 | E4:1.5 D4:0.5 D4:2`),
+    blurb: 'The whole tune, on the D and A strings.',
+    notes: melodyOf(ODE, 2),
   },
   {
     id: 'canon-v',
     title: 'Canon in D',
     emoji: '💒',
     bpm: 66,
-    level: 2,
-    blurb: 'Pachelbel. Long, slow, whole bows on the A and E strings.',
-    notes: parseSong(`F#5:2 E5:2 D5:2 C#5:2 | B4:2 A4:2 B4:2 C#5:2 | D5:2 C#5:2 B4:2 A4:2 | G4:2 F#4:2 G4:2 E4:2 | D4:4`),
+    level: 3,
+    blurb: 'Pachelbel, all the variations. Starts with slow whole bows, then gets busy.',
+    notes: melodyOf(CANON_VARS.join(' ')),
   },
   {
     id: 'minuet-v',
@@ -204,12 +213,8 @@ export const VIOLIN_SONGS: Song[] = [
     emoji: '👑',
     bpm: 92,
     level: 3,
-    blurb: 'Bach. Quick string crossings and a low 2 for C.',
-    notes: parseSong(`
-      D5:1 G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1 G4:1 G4:1 | E5:1 C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1 G4:1 G4:1 |
-      C5:1 D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1 C5:0.5 B4:0.5 A4:0.5 G4:0.5 | F#4:1 G4:0.5 A4:0.5 B4:0.5 G4:0.5 | A4:3 |
-      D5:1 G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1 G4:1 G4:1 | E5:1 C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1 G4:1 G4:1 |
-      C5:1 D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1 C5:0.5 B4:0.5 A4:0.5 G4:0.5 | A4:1 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 | G4:3`),
+    blurb: 'Bach, both parts. Quick string crossings and a low 2 for C.',
+    notes: [...melodyOf(MINUET_A), ...melodyOf(MINUET_B).map((n) => ({ ...n, beat: n.beat + 48 }))],
   },
   {
     id: 'greensleeves-v',
@@ -217,9 +222,8 @@ export const VIOLIN_SONGS: Song[] = [
     emoji: '🍃',
     bpm: 88,
     level: 3,
-    blurb: 'Minor key: low 1 for F on the E string, high 3 for G#.',
-    notes: parseSong(`A4:1 | C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:2 A4:1 | A4:1.5 G#4:0.5 A4:1 | B4:2 G#4:1 | E4:2 A4:1 |
-      C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:1.5 B4:0.5 A4:1 | G#4:1.5 F#4:0.5 G#4:1 | A4:3`),
+    blurb: 'Both parts. Minor key: low 1 for F on the E string, high 3 for G#.',
+    notes: melodyOf(GS_A + ' ' + GS_B),
   },
 ];
 

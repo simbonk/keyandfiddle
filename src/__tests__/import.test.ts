@@ -68,3 +68,10 @@ describe('voice', () => {
     expect(67 + sh).toBeLessThanOrEqual(60);
   });
 });
+
+import { VIOLIN_SONGS, fingeringFor } from '../violin/theory';
+describe('violin songs', () => {
+  it('every note can be played in first position', () => {
+    for (const s of VIOLIN_SONGS) for (const n of s.notes) expect(fingeringFor(n.midi!), `${s.id} ${n.midi}`).not.toBeNull();
+  });
+});

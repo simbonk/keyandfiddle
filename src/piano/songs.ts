@@ -53,19 +53,6 @@ export const PIANO_SONGS: Song[] = [
       C3:1:L D3:1:L E3:1:L F3:1:L | G3:2:L F3:1:L E3:1:L | D3:1:L E3:1:L D3:1:L C3:1:L | G3:2:L C3:2:L`),
   },
   {
-    id: 'jingle-bells-chorus',
-    title: 'Jingle Bells (chorus)',
-    emoji: '🔔',
-    bpm: 112,
-    level: 2,
-    blurb: 'Both hands: left hand answers the right.',
-    notes: parseSong(`
-      E4:1 E4:1 E4:2 | E4:1 E4:1 E4:2 | E4:1 G4:1 C4:1.5 D4:0.5 | E4:4:f |
-      C3:1:L G3:1:L C3:2:L |
-      F4:1 F4:1 F4:1.5 F4:0.5 | F4:1 E4:1 E4:1 E4:0.5 E4:0.5 | E4:1 D4:1 D4:1 E4:1 | D4:2 G4:2:f |
-      G3:1:L B3:1:L G3:2:L`),
-  },
-  {
     id: 'happy-birthday',
     title: 'Happy Birthday',
     emoji: '🎂',
@@ -74,74 +61,6 @@ export const PIANO_SONGS: Song[] = [
     notes: parseSong(`
       G3:0.75 G3:0.25 A3:1 G3:1 | C4:1 B3:2 | G3:0.75 G3:0.25 A3:1 G3:1 | D4:1 C4:2 |
       G3:0.75 G3:0.25 G4:1:f E4:1 | C4:1 B3:1 A3:1 | F4:0.75 F4:0.25 E4:1 C4:1 | D4:1 C4:2`),
-  },
-  {
-    id: 'minuet-g',
-    title: 'Minuet in G',
-    emoji: '👑',
-    bpm: 100,
-    level: 2,
-    blurb: 'Bach notebook classic. Needs keys up to G5, so the keyboard grows.',
-    notes: parseSong(`
-      D5:1+G3:2:L G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1+B3:3:L G4:1 G4:1 |
-      E5:1+C4:3:L C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1+B3:3:L G4:1 G4:1 |
-      C5:1+A3:3:L D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1+G3:3:L C5:0.5 B4:0.5 A4:0.5 G4:0.5 |
-      F#4:1+D4:1:L G4:0.5 A4:0.5 B4:0.5 G4:0.5 | A4:3+D3:3:L |
-      D5:1+G3:2:L G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1+B3:3:L G4:1 G4:1 |
-      E5:1+C4:3:L C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1+B3:3:L G4:1 G4:1 |
-      C5:1+A3:3:L D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1+G3:3:L C5:0.5 B4:0.5 A4:0.5 G4:0.5 |
-      A4:1+D4:1:L B4:0.5 A4:0.5 G4:0.5 F#4:0.5 | G4:3:f+G3:3:L`),
-  },
-  {
-    id: 'prelude-c',
-    title: 'Prelude in C',
-    emoji: '🌊',
-    bpm: 70,
-    level: 3,
-    blurb: 'Bach. Rolling patterns: left hand starts each one, right hand ripples.',
-    notes: parseSong(
-      [
-        ['C4', 'E4', 'G4', 'C5', 'E5'],
-        ['C4', 'D4', 'A4', 'D5', 'F5'],
-        ['B3', 'D4', 'G4', 'D5', 'F5'],
-        ['C4', 'E4', 'G4', 'C5', 'E5'],
-        ['C4', 'E4', 'A4', 'E5', 'A5'],
-        ['C4', 'D4', 'F#4', 'A4', 'D5'],
-        ['B3', 'D4', 'G4', 'D5', 'G5'],
-        ['B3', 'C4', 'E4', 'G4', 'C5'],
-      ]
-        .map(([a, b, c, d, e]) => {
-          const half = `${a}:0.5:L ${b}:0.5:L ${c}:0.5 ${d}:0.5 ${e}:0.5 ${c}:0.5 ${d}:0.5 ${e}:0.5`;
-          return `${half} ${half}`;
-        })
-        .join(' | ') + ' | C4:4:L+C3:4:L',
-    ),
-  },
-  {
-    id: 'entertainer',
-    title: 'The Entertainer',
-    emoji: '🎩',
-    bpm: 84,
-    level: 3,
-    blurb: 'Scott Joplin ragtime. Bouncy and quick!',
-    notes: parseSong(`
-      D4:0.5 D#4:0.5 | E4:0.5 C5:1 E4:0.5 C5:1 E4:0.5 C5:2.5:f+C3:1:L |
-      C5:0.5 D5:0.5 D#5:0.5 E5:0.5 C5:0.5 D5:0.5 E5:1+G3:1:L B4:0.5 D5:1 C5:2+C3:1:L |
-      D4:0.5 D#4:0.5 | E4:0.5 C5:1 E4:0.5 C5:1 E4:0.5 C5:2.5:f+C3:1:L |
-      A4:0.5 G4:0.5 F#4:0.5 A4:0.5 C5:0.5 E5:1+D3:1:L D5:0.5 C5:0.5 A4:0.5 D5:3+G3:1:L`),
-  },
-  {
-    id: 'turkish-march',
-    title: 'Turkish March',
-    emoji: '🥁',
-    bpm: 76,
-    level: 3,
-    blurb: 'Mozart. Very fast wiggles up to high C. Try half speed first!',
-    notes: parseSong(`
-      B4:0.25 A4:0.25 G#4:0.25 A4:0.25 C5:1+A3:1:L | D5:0.25 C5:0.25 B4:0.25 C5:0.25 E5:1+A3:1:L |
-      F5:0.25 E5:0.25 D#5:0.25 E5:0.25 B5:0.25 A5:0.25 G#5:0.25 A5:0.25 B5:0.25 A5:0.25 G#5:0.25 A5:0.25 C6:1:f+A3:1:L |
-      A5:0.5 C6:0.5 | B5:0.5+E3:1:L A5:0.5 G5:0.5 A5:0.5 | B5:0.5+E3:1:L A5:0.5 G5:0.5 A5:0.5 |
-      B5:0.5+E3:1:L A5:0.5 G5:0.5 F#5:0.5 | E5:1+E3:1:L`),
   },
 ];
 
@@ -224,34 +143,104 @@ const FE_B = `C3:0.5:L+E5:1.5 G3:0.5:L C4:0.5:L G4:0.5 F5:0.5 E5:0.5 |
   E2:0.5:L+B4:1 E3:0.5:L E4:0.5:L R:0.5 E4:0.5 E5:0.5 |
   R:1 E4:0.5 E5:0.5 R:0.5 D#5:0.5 | E5:0.5 R:1 D#5:0.5 E5:0.5 D#5:0.5 |`;
 
-const JB_VERSE_A = `G4:1 E5:1 D5:1 C5:1 | G4:3 G4:0.5 G4:0.5 | G4:1 E5:1 D5:1 C5:1 | A4:4 |
+export const JB_VERSE_A = `G4:1 E5:1 D5:1 C5:1 | G4:3 G4:0.5 G4:0.5 | G4:1 E5:1 D5:1 C5:1 | A4:4 |
   A4:1 F5:1 E5:1 D5:1 | B4:4 | G5:1 G5:1 F5:1 D5:1 | E5:4 |
   G4:1 E5:1 D5:1 C5:1 | G4:4 | G4:1 E5:1 D5:1 C5:1 | A4:3 A4:1 |
   A4:1 F5:1 E5:1 D5:1 | G5:1 G5:1 G5:1 G5:1 | A5:1 G5:1 F5:1 D5:1 | C5:2 G5:2 |`;
 const JB_VERSE_C = 'C | C | C | F | F | G | G | C | C | C | C | F | F | G | G | C';
-const JB_CHORUS = `E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:0.5 | E5:4:f |
+export const JB_CHORUS = `E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:0.5 | E5:4:f |
   F5:1 F5:1 F5:1.5 F5:0.5 | F5:1 E5:1 E5:1 E5:0.5 E5:0.5 | E5:1 D5:1 D5:1 E5:1 | D5:2 G5:2 |
   E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:0.5 | E5:4:f |
   F5:1 F5:1 F5:1 F5:1 | F5:1 E5:1 E5:1 E5:0.5 E5:0.5 | G5:1 G5:1 F5:1 D5:1 | C5:4:f |`;
 const JB_CHORUS_C = 'C | C | C | C | F | C | D G | G | C | C | C | C | F | C | G | C';
 
-const GS_A = `A4:1 |
+export const GS_A = `A4:1 |
   C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:2 A4:1 | A4:1.5 G#4:0.5 A4:1 | B4:2 G#4:1 | E4:2 A4:1 |
   C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:1.5 B4:0.5 A4:1 | G#4:1.5 F#4:0.5 G#4:1 | A4:3 | A4:3 |`;
-const GS_B = `G5:3:f | G5:1.5 F#5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:2 A4:1 | A4:1.5 G#4:0.5 A4:1 | B4:2 G#4:1 | E4:3 |
+export const GS_B = `G5:3:f | G5:1.5 F#5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:2 A4:1 | A4:1.5 G#4:0.5 A4:1 | B4:2 G#4:1 | E4:3 |
   G5:3:f | G5:1.5 F#5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:1.5 B4:0.5 A4:1 | G#4:1.5 F#4:0.5 G#4:1 | A4:3 | A4:3`;
 const GS_CHORDS = `Am | C | G | Em | Am | E | E | Am |
   Am | C | G | Em | Am | E | E | Am | Am |
   C | Em | G | Em | Am | E | E | E |
   C | Em | G | Em | Am | E | E | Am | Am`;
 
-const ODE = `E4:1:p E4:1:p F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | E4:1.5 D4:0.5 D4:2 |
+export const ODE = `E4:1:p E4:1:p F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | E4:1.5 D4:0.5 D4:2 |
   E4:1 E4:1 F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | D4:1.5 C4:0.5 C4:2 |
   D4:1 D4:1 E4:1 C4:1 | D4:1 E4:0.5 F4:0.5 E4:1 C4:1 | D4:1 E4:0.5 F4:0.5 E4:1 D4:1 | C4:1 D4:1 G3:2 |
   E4:1:f E4:1:f F4:1:f G4:1:f | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | D4:1.5 C4:0.5 C4:2`;
 const ODE_CHORDS = `C | G | C | G | C | G | C | G C | G | G C | G C | G | C | G | C | G C`;
 
+export const CANON_VARS = [
+      'F#5:2:p E5:2:p D5:2:p C#5:2:p B4:2 A4:2 B4:2 C#5:2',
+      'D5:2 C#5:2 B4:2 A4:2 G4:2 F#4:2 G4:2 E4:2',
+      'D4:1 F#4:1 A4:1 G4:1 F#4:1 D4:1 F#4:1 E4:1 D4:1 B3:1 D4:1 A4:1 G4:1 B4:1 A4:1 G4:1',
+      'F#4:1 D4:1 E4:1 C#5:1 D5:1 F#5:1 A5:1 A4:1 B4:1 G4:1 A4:1 F#4:1 D4:1 D5:1 D5:1.5 C#5:0.5',
+      'D5:0.5 C#5:0.5 D5:0.5 D4:0.5 C#4:0.5 A4:0.5 E4:0.5 F#4:0.5 D4:0.5 D5:0.5 C#5:0.5 B4:0.5 C#5:0.5 F#5:0.5 A5:0.5 B5:0.5 ' +
+        'G5:0.5 F#5:0.5 E5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 C#5:0.5 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 E4:0.5 G4:0.5 F#4:0.5 E4:0.5',
+      'D4:0.5 E4:0.5 F#4:0.5 G4:0.5 A4:0.5 E4:0.5 A4:0.5 G4:0.5 F#4:0.5 B4:0.5 A4:0.5 G4:0.5 A4:0.5 G4:0.5 F#4:0.5 E4:0.5 ' +
+        'D4:0.5 B3:0.5 B4:0.5 C#5:0.5 D5:0.5 C#5:0.5 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 E4:0.5 B4:0.5 A4:0.5 B4:0.5 A4:0.5 G4:0.5',
+      'F#5:2:p E5:2:p D5:2:p C#5:2:p B4:2:p A4:2:p B4:2:p C#5:2:p',
+];
+
+export const MINUET_A = `
+      D5:1+G3:2:L G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1+B3:3:L G4:1 G4:1 |
+      E5:1+C4:3:L C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1+B3:3:L G4:1 G4:1 |
+      C5:1+A3:3:L D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1+G3:3:L C5:0.5 B4:0.5 A4:0.5 G4:0.5 |
+      F#4:1+D4:1:L G4:0.5 A4:0.5 B4:0.5 G4:0.5 | A4:3+D3:3:L |
+      D5:1+G3:2:L G4:0.5 A4:0.5 B4:0.5 C5:0.5 | D5:1+B3:3:L G4:1 G4:1 |
+      E5:1+C4:3:L C5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1+B3:3:L G4:1 G4:1 |
+      C5:1+A3:3:L D5:0.5 C5:0.5 B4:0.5 A4:0.5 | B4:1+G3:3:L C5:0.5 B4:0.5 A4:0.5 G4:0.5 |
+      A4:1+D4:1:L B4:0.5 A4:0.5 G4:0.5 F#4:0.5 | G4:3:f+G3:3:L`;
+export const MINUET_B = `B5:1 G5:0.5 A5:0.5 B5:0.5 G5:0.5 | A5:1 D5:0.5 E5:0.5 F#5:0.5 D5:0.5 | G5:1 E5:0.5 F#5:0.5 G5:0.5 D5:0.5 | C#5:1 B4:0.5 C#5:0.5 A4:1 |
+  A4:0.5 B4:0.5 C#5:0.5 D5:0.5 E5:0.5 F#5:0.5 | G5:1 F#5:1 E5:1 | F#5:1 A4:1 C#5:1 | D5:3 |
+  D5:1 G4:0.5 F#4:0.5 G4:1 | E5:1 G4:0.5 F#4:0.5 G4:1 | D5:1 C5:1 B4:1 | A4:0.5 G4:0.5 F#4:0.5 G4:0.5 A4:1 |
+  D4:0.5 E4:0.5 F#4:0.5 G4:0.5 A4:0.5 B4:0.5 | C5:1 B4:1 A4:1 | B4:0.5 D5:0.5 G4:1 F#4:1 | G4:3`;
+const MINUET_B_CHORDS = 'G | D | Em | A | A | Em | D A | D | G | C | G | D | D | Am | G D | G';
+
+const PRELUDE_BARS = [
+  'C4 E4 G4 C5 E5', 'C4 D4 A4 D5 F5', 'B3 D4 G4 D5 F5', 'C4 E4 G4 C5 E5', 'C4 E4 A4 E5 A5', 'C4 D4 F#4 A4 D5',
+  'B3 D4 G4 D5 G5', 'B3 C4 E4 G4 C5', 'A3 C4 E4 G4 C5', 'D3 A3 D4 F#4 C5', 'G3 B3 D4 G4 B4', 'G3 A#3 E4 G4 C#5',
+  'F3 A3 D4 A4 D5', 'F3 G#3 D4 F4 B4', 'E3 G3 C4 G4 C5', 'E3 F3 A3 C4 F4', 'D3 F3 A3 C4 F4', 'G2 D3 G3 B3 F4',
+  'C3 E3 G3 C4 E4', 'C3 G3 A#3 C4 E4', 'F2 F3 A3 C4 E4', 'F#2 C3 A3 C4 D#4', 'G#2 F3 B3 C4 D4', 'G2 F3 G3 B3 D4',
+  'G2 E3 G3 C4 E4', 'G2 D3 G3 C4 F4', 'G2 D3 G3 B3 F4', 'G2 D#3 A3 C4 F#4', 'G2 E3 G3 C4 G4', 'G2 D3 G3 C4 F4',
+  'G2 D3 G3 B3 F4', 'C2 C3 G3 A#3 E4',
+];
+function prelude(): SongNote[] {
+  const bars = PRELUDE_BARS.map((b) => {
+    const [a, c, d, e, f] = b.split(' ');
+    const half = `${a}:0.5:L ${c}:0.5:L ${d}:0.5 ${e}:0.5 ${f}:0.5 ${d}:0.5 ${e}:0.5 ${f}:0.5`;
+    return `${half} ${half}`;
+  });
+  bars.push('C2:0.5:L C3:0.5:L F3:0.5 A3:0.5 C4:0.5 F4:0.5 C4:0.5 A3:0.5 C4:0.5 A3:0.5 F3:0.5 A3:0.5 F3:0.5 D3:0.5 F3:0.5 D3:0.5');
+  bars.push('C2:0.5:L B2:0.5:L G4:0.5 B4:0.5 D5:0.5 F5:0.5 D5:0.5 B4:0.5 D5:0.5 B4:0.5 G4:0.5 B4:0.5 D4:0.5 F4:0.5 E4:0.5 D4:0.5');
+  bars.push('C2:4:L+C3:4:L+E4:4+G4:4+C5:4');
+  return parseSong(bars.join(' | '));
+}
+
+function minuet(): SongNote[] {
+  const b = arrange(MINUET_B, MINUET_B_CHORDS, 3, 'root').map((n) => ({ ...n, beat: n.beat + 48 }));
+  return [...parseSong(MINUET_A), ...b];
+}
+
 export const FULL_SONGS: Song[] = [
+  {
+    id: 'minuet-g',
+    title: 'Minuet in G',
+    emoji: '👑',
+    bpm: 100,
+    level: 2,
+    blurb: 'Bach notebook classic, both parts. The keyboard grows to fit.',
+    notes: minuet(),
+  },
+  {
+    id: 'prelude-c',
+    title: 'Prelude in C',
+    emoji: '🌊',
+    bpm: 70,
+    level: 3,
+    blurb: 'Bach, all 35 bars. Left hand starts each pattern, right hand ripples.',
+    notes: prelude(),
+  },
   {
     id: 'ode-to-joy',
     title: 'Ode to Joy',
@@ -263,7 +252,7 @@ export const FULL_SONGS: Song[] = [
   },
   {
     id: 'jingle-bells',
-    title: 'Jingle Bells (full)',
+    title: 'Jingle Bells',
     emoji: '🔔',
     bpm: 120,
     level: 2,
@@ -272,7 +261,7 @@ export const FULL_SONGS: Song[] = [
   },
   {
     id: 'greensleeves',
-    title: 'Greensleeves (full)',
+    title: 'Greensleeves',
     emoji: '🍃',
     bpm: 100,
     level: 2,
@@ -292,22 +281,12 @@ export const FULL_SONGS: Song[] = [
   },
   {
     id: 'canon-d',
-    title: 'Canon in D (full)',
+    title: 'Canon in D',
     emoji: '💒',
     bpm: 72,
     level: 3,
     blurb: 'Pachelbel. The left hand repeats the same 8 notes while the tune keeps changing on top.',
-    notes: canon([
-      'F#5:2:p E5:2:p D5:2:p C#5:2:p B4:2 A4:2 B4:2 C#5:2',
-      'D5:2 C#5:2 B4:2 A4:2 G4:2 F#4:2 G4:2 E4:2',
-      'D4:1 F#4:1 A4:1 G4:1 F#4:1 D4:1 F#4:1 E4:1 D4:1 B3:1 D4:1 A4:1 G4:1 B4:1 A4:1 G4:1',
-      'F#4:1 D4:1 E4:1 C#5:1 D5:1 F#5:1 A5:1 A4:1 B4:1 G4:1 A4:1 F#4:1 D4:1 D5:1 D5:1.5 C#5:0.5',
-      'D5:0.5 C#5:0.5 D5:0.5 D4:0.5 C#4:0.5 A4:0.5 E4:0.5 F#4:0.5 D4:0.5 D5:0.5 C#5:0.5 B4:0.5 C#5:0.5 F#5:0.5 A5:0.5 B5:0.5 ' +
-        'G5:0.5 F#5:0.5 E5:0.5 G5:0.5 F#5:0.5 E5:0.5 D5:0.5 C#5:0.5 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 E4:0.5 G4:0.5 F#4:0.5 E4:0.5',
-      'D4:0.5 E4:0.5 F#4:0.5 G4:0.5 A4:0.5 E4:0.5 A4:0.5 G4:0.5 F#4:0.5 B4:0.5 A4:0.5 G4:0.5 A4:0.5 G4:0.5 F#4:0.5 E4:0.5 ' +
-        'D4:0.5 B3:0.5 B4:0.5 C#5:0.5 D5:0.5 C#5:0.5 B4:0.5 A4:0.5 G4:0.5 F#4:0.5 E4:0.5 B4:0.5 A4:0.5 B4:0.5 A4:0.5 G4:0.5',
-      'F#5:2:p E5:2:p D5:2:p C#5:2:p B4:2:p A4:2:p B4:2:p C#5:2:p',
-    ]),
+    notes: canon(CANON_VARS),
   },
 ];
 
