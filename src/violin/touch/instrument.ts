@@ -523,7 +523,17 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
     const x = semis === 0 ? L.openX : L.semisX(semis);
     const gw = gemWidth(L, semis);
     ctx.fillStyle = STRINGS[n.fing.string].color;
-    roundRect(ctx, x - gw / 2, gy, gw, gh, 10);
+    if (readRot) {
+      // ends slanted toward the reading angle, so they face the player
+      const sl = Math.tan(Math.max(-0.7, Math.min(0.7, readRot))) * (gw / 2);
+      ctx.beginPath();
+      ctx.moveTo(x - gw / 2, gy - sl);
+      ctx.lineTo(x + gw / 2, gy + sl);
+      ctx.lineTo(x + gw / 2, gy + gh + sl);
+      ctx.lineTo(x - gw / 2, gy + gh - sl);
+      ctx.closePath();
+      ctx.lineJoin = 'round';
+    } else roundRect(ctx, x - gw / 2, gy, gw, gh, 10);
     ctx.fill();
     if (isCur) {
       ctx.lineWidth = 4;
@@ -602,18 +612,26 @@ export function drawTouchViolin(
   showNames: boolean,
   now: number,
   mirror = false,
+  readAngle = 0,
 ) {
-  if (!mirror) return drawViolinSurface(ctx, st, t, showNames, now);
+  // text turns toward the scroll, to face a player looking down the neck
+  readRot = (-readAngle * Math.PI) / 180;
+  if (!mirror && !readRot) return drawViolinSurface(ctx, st, t, showNames, now);
   ctx.save();
-  ctx.translate(st.L.w, 0);
-  ctx.scale(-1, 1);
+  if (mirror) {
+    ctx.translate(st.L.w, 0);
+    ctx.scale(-1, 1);
+  }
   const plain = ctx.fillText;
   ctx.fillText = function (this: CanvasRenderingContext2D, text: string, x: number, y: number) {
     this.save();
     this.translate(x, y);
-    this.scale(-1, 1);
     const a = this.textAlign;
-    this.textAlign = a === 'left' ? 'right' : a === 'right' ? 'left' : a;
+    if (mirror) {
+      this.scale(-1, 1);
+      this.textAlign = a === 'left' ? 'right' : a === 'right' ? 'left' : a;
+    }
+    if (readRot) this.rotate(mirror ? -readRot : readRot);
     plain.call(this, text, 0, 0);
     this.textAlign = a;
     this.restore();
@@ -624,6 +642,54 @@ export function drawTouchViolin(
     delete (ctx as unknown as { fillText?: unknown }).fillText;
     ctx.restore();
   }
+}
+
+/** Rotation (radians, drawing coordinates) that text is drawn at; see drawTouchViolin. */
+let readRot = 0;
+
+/** Run `draw` in a frame turned to the reading angle around (x, y); text inside is not turned again. */
+function turned(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => void) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(readRot);
+  const r = readRot;
+  readRot = 0;
+  try {
+    draw();
+  } finally {
+    readRot = r;
+    ctx.restore();
+  }
+}
+
+/** Lines of text as one block turned to the reading angle, shrunk to fit a w x h box. */
+function textBlock(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  lines: { text: string; font: (px: number) => string; px: number; color: string; dy: number }[],
+  maxW = Infinity,
+  maxH = Infinity,
+) {
+  let bw = 0;
+  for (const l of lines) {
+    ctx.font = l.font(l.px);
+    bw = Math.max(bw, ctx.measureText(l.text).width);
+  }
+  const top = Math.min(...lines.map((l) => l.dy - l.px));
+  const bot = Math.max(...lines.map((l) => l.dy + l.px * 0.3));
+  const bh = bot - top;
+  const c = Math.abs(Math.cos(readRot));
+  const sn = Math.abs(Math.sin(readRot));
+  const k = Math.min(1, maxW / (bw * c + bh * sn), maxH / (bw * sn + bh * c));
+  turned(ctx, cx, cy, () => {
+    ctx.textAlign = 'center';
+    for (const l of lines) {
+      ctx.font = l.font(Math.max(8, Math.round(l.px * k)));
+      ctx.fillStyle = l.color;
+      ctx.fillText(l.text, 0, (l.dy - (top + bot) / 2) * k);
+    }
+  });
 }
 
 function drawViolinSurface(
@@ -721,14 +787,14 @@ function drawViolinSurface(
     ctx.fillStyle = 'rgba(242,227,196,0.6)';
     ctx.fillRect(x - 1.5, Math.min(y0, y1), 3, Math.abs(y1 - y0));
     if (!t.falling) {
-      ctx.fillStyle = 'rgba(242,227,196,0.9)';
-      ctx.font = `800 13px ${FONT}`;
-      ctx.textAlign = 'center';
       const [num, name] = label.split(' ');
       const ly = y1 + e * 14 + (e > 0 ? 0 : 4);
-      ctx.fillText(num, x, ly);
-      ctx.font = `700 11px ${FONT}`;
-      ctx.fillText(name, x, ly + e * 13);
+      const col = 'rgba(242,227,196,0.9)';
+      const off = readRot ? e * Math.abs(Math.sin(readRot)) * 16 : 0;
+      textBlock(ctx, x, ly + e * 6 - 4 + off, [
+        { text: num, font: (px) => `800 ${px}px ${FONT}`, px: 13, color: col, dy: e > 0 ? 0 : 13 },
+        { text: name, font: (px) => `700 ${px}px ${FONT}`, px: 11, color: col, dy: e > 0 ? 13 : 0 },
+      ]);
     }
   }
 
@@ -829,13 +895,19 @@ function drawViolinSurface(
         : `${FINGER_NAMES[tgt.finger]} finger (${tgt.finger}) on ${STRINGS[tgt.string].name}`;
     ctx.font = `800 18px ${FONT}`;
     const tw = ctx.measureText(label).width + 24;
-    const ly = edgeIn(Math.max(L.nutX, x), L.spacing(x)) + e * 30;
-    const lx = Math.max(L.x0 + tw / 2, x);
-    ctx.fillStyle = col;
-    roundRect(ctx, lx - tw / 2, ly - 16, tw, 30, 15);
-    ctx.fill();
-    ctx.fillStyle = '#10082a';
-    ctx.fillText(label, lx, ly + 5);
+    // turned, the pill reaches further along y and less along x
+    const ext = { x: (tw / 2) * Math.abs(Math.cos(readRot)) + 15, y: (tw / 2) * Math.abs(Math.sin(readRot)) + 15 };
+    const ly = edgeIn(Math.max(L.nutX, x), L.spacing(x)) + e * (15 + ext.y);
+    const lx = Math.max(L.x0 + ext.x, x);
+    turned(ctx, lx, ly, () => {
+      ctx.fillStyle = col;
+      roundRect(ctx, -tw / 2, -15, tw, 30, 15);
+      ctx.fill();
+      ctx.fillStyle = '#10082a';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, 0, 1);
+      ctx.textBaseline = 'alphabetic';
+    });
     // the lane to bow in: arrows marching the way to bow
     drawLaneArrows(ctx, L, tgt.string, tgt.bow.dir, now, 1);
   }
@@ -885,24 +957,40 @@ function drawViolinSurface(
   // ---- free play: what you're playing, big ----
   if (!t.falling) {
     const cx = (L.x0 + L.fbEnd) / 2;
-    const cy = L.top ? (L.strikeY + L.h) / 2 - 20 : L.strikeY * 0.45;
-    ctx.textAlign = 'center';
+    const areaH = Math.abs(L.far - L.strikeY);
+    const cy = L.top ? (L.strikeY + L.h) / 2 : L.strikeY * 0.45;
+    const maxW = (L.fbEnd - L.x0) * 0.92;
+    const maxH = areaH * 0.85;
+    const bold = (px: number) => `800 ${px}px ${FONT}`;
+    const med = (px: number) => `700 ${px}px ${FONT}`;
     if (sounding) {
-      ctx.fillStyle = STRINGS[sounding.string].color;
-      ctx.font = `800 ${Math.round(Math.min(120, Math.abs(L.far - L.strikeY) * 0.35))}px ${FONT}`;
-      ctx.fillText(midiName(Math.round(sounding.midi)), cx, cy + 20);
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.font = `700 20px ${FONT}`;
-      ctx.fillText(sounding.dir === 'down' ? '⊓ down bow' : 'V up bow', cx, cy + 56);
+      textBlock(
+        ctx,
+        cx,
+        cy,
+        [
+          { text: midiName(Math.round(sounding.midi)), font: bold, px: Math.round(Math.min(120, areaH * 0.35)), color: STRINGS[sounding.string].color, dy: 20 },
+          { text: sounding.dir === 'down' ? '⊓ down bow' : 'V up bow', font: med, px: 20, color: 'rgba(255,255,255,0.7)', dy: 56 },
+        ],
+        maxW,
+        maxH,
+      );
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.font = `800 22px ${FONT}`;
-      ctx.fillText('One hand: press the strings on the neck', cx, cy - 6);
-      ctx.fillText('Other hand: bow up and down in the bow area ↕', cx, cy + 26);
-      ctx.font = `700 16px ${FONT}`;
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText('Pull away from the edge for a down bow, push back for an up bow', cx, cy + 56);
-      ctx.fillText('Touch a string name on the scroll to play that open string', cx, cy + 80);
+      const hi = 'rgba(255,255,255,0.75)';
+      const lo = 'rgba(255,255,255,0.5)';
+      textBlock(
+        ctx,
+        cx,
+        cy,
+        [
+          { text: 'One hand: press the strings on the neck', font: bold, px: 22, color: hi, dy: -6 },
+          { text: 'Other hand: bow up and down in the bow area ↕', font: bold, px: 22, color: hi, dy: 26 },
+          { text: 'Pull away from the edge for a down bow, push back for an up bow', font: med, px: 16, color: lo, dy: 56 },
+          { text: 'Touch a string name on the scroll to play that open string', font: med, px: 16, color: lo, dy: 80 },
+        ],
+        maxW,
+        maxH,
+      );
     }
   }
 }
@@ -963,11 +1051,16 @@ function drawLaneArrows(ctx: CanvasRenderingContext2D, L: Layout, s: number, dir
   const my = (L.laneY0 + L.laneY1) / 2;
   const label = dir === 'down' ? '⊓ down bow' : 'V up bow';
   ctx.fillStyle = 'rgba(16,8,42,0.75)';
-  const mx = Math.max(L.pad.x + 60, Math.min(L.pad.x + L.pad.w - 60, L.laneX(s, my)));
-  roundRect(ctx, mx - 56, my - 18, 112, 28, 14);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.fillText(label, mx, my + 3);
+  const ex = 56 * Math.abs(Math.cos(readRot)) + 14 * Math.abs(Math.sin(readRot)) + 4;
+  const mx = Math.max(L.pad.x + ex, Math.min(L.pad.x + L.pad.w - ex, L.laneX(s, my)));
+  turned(ctx, mx, my, () => {
+    roundRect(ctx, -56, -14, 112, 28, 14);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 1);
+    ctx.textBaseline = 'alphabetic';
+  });
   ctx.restore();
 }
 

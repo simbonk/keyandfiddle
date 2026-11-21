@@ -30,7 +30,7 @@ function Strings({ x, y, len, gap }: { x: number; y: number; len: number; gap: n
 
 export function RotateGraphic() {
   return (
-    <svg viewBox="0 0 420 150" className="tv-tip-art" role="img" aria-label="Hold the iPad upright, turn on rotation lock, then turn it sideways">
+    <svg viewBox="0 0 430 152" className="tv-tip-art" role="img" aria-label="Hold the iPad upright, turn on rotation lock, then turn it sideways">
       {/* 1. upright */}
       <Ipad x={22} y={14} w={74} h={102} />
       {/* USB-C port on top, top button at the bottom (upside down) */}
@@ -64,18 +64,32 @@ export function RotateGraphic() {
       <path d="M232 65 h22" stroke={MUTED} strokeWidth={2.5} strokeLinecap="round" />
       <path d="M248 58 l8 7 l-8 7" fill="none" stroke={MUTED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
-      {/* 3. sideways like a violin */}
+      {/* 3. sideways like a violin, tilted, looked at from the chin end */}
+      <g transform="rotate(-22 330 66)">
       <Ipad x={272} y={26} w={128} h={86}>
         <rect x={278} y={31} width={14} height={20} rx={3} fill="#8a4a1c" />
         <rect x={292} y={31} width={66} height={20} fill="#17140f" />
         <Strings x={292} y={33} len={100} gap={5.4} />
         <rect x={362} y={31} width={33} height={76} rx={5} fill="#8f4a17" opacity={0.85} />
         <path d="M374 62 l-6 30 M380 62 l-2 30 M386 62 l2 30" stroke={ACCENT} strokeWidth={1.6} opacity={0.8} />
+        {/* the words, turned to face the player */}
+        <g transform="rotate(-60 322 82)">
+          <rect x={304} y={76} width={36} height={11} rx={5.5} fill={ACCENT} />
+          <text x={322} y={84.5} textAnchor="middle" fontSize={7} fontWeight={800} fill="#10082a">
+            A · V
+          </text>
+        </g>
       </Ipad>
-      <path d="M392 18 a30 30 0 0 0 -34 -6" fill="none" stroke={ACCENT} strokeWidth={2.5} strokeLinecap="round" />
-      <path d="M362 6 l-5 6 l7 3" fill="none" stroke={ACCENT} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-      <text x={336} y={142} textAnchor="middle" fill={MUTED} fontSize={13} fontWeight={700}>
-        3. Turn it sideways
+      </g>
+      {/* the player: chin on the bow end, looking up the neck */}
+      <g>
+        <circle cx={404} cy={118} r={13} fill="#f2c9a0" stroke={INK} strokeWidth={2} />
+        <path d="M393 112 q11 -14 22 0" fill="#5a3418" />
+        <path d="M396 110 l-36 -40" stroke={ACCENT} strokeWidth={2} strokeDasharray="3 4" strokeLinecap="round" />
+        <path d="M356 72 l2 8 l5 -6 z" fill={ACCENT} />
+      </g>
+      <text x={330} y={146} textAnchor="middle" fill={MUTED} fontSize={13} fontWeight={700}>
+        3. Hold it like a violin
       </text>
     </svg>
   );
@@ -97,8 +111,9 @@ export function RotateTip({ portrait, onDone }: { portrait: boolean; onDone: () 
             stops turning.
           </li>
           <li>
-            <b>Turn the iPad sideways.</b> The violin is drawn sideways for you, with the strings right at the edge
-            your fingers curl over. Upside down? Tap <b>↻ Flip</b>.
+            <b>Hold it like a violin:</b> chin end toward you, tilted, looking up the neck. The strings are right
+            at the edge your fingers curl over, and the words turn to face you (change the angle in ⚙️ Options,
+            Word angle). Upside down? Tap <b>↻ Flip</b>.
           </li>
         </ol>
         {!portrait && (

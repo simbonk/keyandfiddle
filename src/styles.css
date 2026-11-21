@@ -2033,3 +2033,83 @@ select option {
 .tv-tip .btn {
   align-self: center;
 }
+
+/* touch violin held at an angle: words turn to face the player */
+.tv-opts-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(10, 6, 30, 0.5);
+}
+.opts-pop.tv-opts-float {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  width: min(420px, 78vw, 78vh);
+  min-width: 0;
+  max-height: min(78vw, 78vh);
+  overflow: auto;
+}
+.tv-opts-done {
+  align-self: center;
+}
+.tv-angle-val {
+  min-width: 3ch;
+  text-align: right;
+}
+.tv-angled .game-bar > *,
+.tv-angled .tv-now,
+.tv-angled .bar-feedback .fb-pill,
+.tv-angled .tv-playing {
+  transform: rotate(var(--tv-read));
+}
+.tv-angled .overlay-center {
+  display: grid;
+  place-items: center;
+}
+.tv-angled .overlay-center > * {
+  grid-area: 1 / 1;
+}
+.tv-angled .overlay-center > .tv-turn {
+  transform: rotate(var(--tv-read));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  text-align: center;
+}
+.tv-angled .tv-now {
+  transform: translateX(-50%) rotate(var(--tv-read));
+  top: 40%;
+}
+.tv-angled .game-bar .lbl {
+  display: none;
+}
+.tv-angled .bar-feedback {
+  position: relative;
+  z-index: 5;
+  overflow: visible;
+}
+.tv-angled .bar-feedback .fb-pill,
+.tv-angled .tv-playing {
+  display: inline-block;
+  white-space: nowrap;
+}
+.tv-angled .game-bar > .seg {
+  transform: none;
+}
+.tv-angled .game-bar > .seg > button {
+  transform: rotate(var(--tv-read));
+}
+/* the feedback pill floats into the music area, where there is room for it turned */
+.tv-angled.neck-top .bar-feedback .fb-pill,
+.tv-angled.neck-top .tv-playing {
+  transform: translateY(-150px) rotate(var(--tv-read));
+}
+.tv-angled:not(.neck-top) .bar-feedback .fb-pill,
+.tv-angled:not(.neck-top) .tv-playing {
+  transform: translateY(150px) rotate(var(--tv-read));
+}
