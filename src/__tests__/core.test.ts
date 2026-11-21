@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PitchDetector } from '../audio/pitch';
 import { midiName, parseSong } from '../audio/notes';
 import { PIANO_SONGS } from '../piano/songs';
+import { songRange } from '../piano/PianoPlay';
 import { DEFAULT_CAL, expectedFreq, matchKey } from '../piano/calibration';
 import { VIOLIN_SONGS, fingeringFor, violinNotes } from '../violin/theory';
 
@@ -25,15 +26,22 @@ describe('pitch detector', () => {
 });
 
 describe('songs', () => {
-  it('parses every piano song inside the default 2 octaves', () => {
+  it('parses every piano song and fits it on at most 4 octaves', () => {
     for (const s of PIANO_SONGS) {
       expect(s.notes.length).toBeGreaterThan(4);
+      const [lo, hi] = songRange(s, 48);
+      expect(hi - lo).toBeLessThanOrEqual(48);
       for (const n of s.notes) {
-        expect(n.midi).not.toBeNull();
-        expect(n.midi!).toBeGreaterThanOrEqual(48);
-        expect(n.midi!).toBeLessThanOrEqual(72);
+        expect(n.midi!).toBeGreaterThanOrEqual(lo);
+        expect(n.midi!).toBeLessThanOrEqual(hi);
       }
     }
+  });
+  it('keeps the normal 2 octaves for easy songs and widens for big ones', () => {
+    const byId = (id: string) => PIANO_SONGS.find((s) => s.id === id)!;
+    expect(songRange(byId('mary'), 48)).toEqual([48, 72]);
+    expect(songRange(byId('canon-d'), 48)).toEqual([36, 84]);
+    expect(songRange(byId('minuet-g'), 48)).toEqual([48, 84]);
   });
   it('parses chords and rests', () => {
     const n = parseSong('C4:1 R:1 E4:2+C3:2:L');

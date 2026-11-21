@@ -3,6 +3,8 @@ import { usePitchListener } from '../audio/hooks';
 import { mic } from '../audio/mic';
 import { midiName, pitchClassName, songLengthBeats, type Song } from '../audio/notes';
 import { playNote } from '../audio/synth';
+import { FullscreenButton, usePlayingMode } from '../ui/chrome';
+import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
 import { Keyboard, keyLayout, type KeyHighlight } from './Keyboard';
 import { type PianoCalibration, matchKey } from './calibration';
@@ -33,31 +35,23 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null }: Props) {
   useEffect(() => {
     if (initialSong) setSong(initialSong);
   }, [initialSong]);
-  if (!song) return <SongPicker songs={songs} onPick={setSong} />;
+  if (!song)
+    return (
+      <SongPicker
+        songs={songs}
+        onPick={setSong}
+        badge={(s) => {
+          const [a, b] = songRange(s, cal.startMidi);
+          return b - a > 24 ? `🎹 ${Math.round((b - a) / 12)} octaves` : null;
+        }}
+      />
+    );
   return <Game key={song.id} song={song} cal={cal} onExit={() => setSong(null)} />;
 }
 
-function SongPicker({ songs, onPick }: { songs: Song[]; onPick: (s: Song) => void }) {
-  return (
-    <div className="panel">
-      <h2>Pick a song</h2>
-      <div className="song-grid">
-        {songs.map((s) => (
-          <button key={s.id} className="song-card" onClick={() => onPick(s)}>
-            <span className="song-emoji">{s.emoji}</span>
-            <b>{s.title}</b>
-            <span className="stars">{'★'.repeat(s.level)}{'☆'.repeat(3 - s.level)}</span>
-            {s.blurb && <span className="muted small">{s.blurb}</span>}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit: () => void }) {
-  const start = cal.startMidi;
-  const end = start + 24;
+  usePlayingMode(true);
+  const [start, end] = useMemo(() => songRange(song, cal.startMidi), [song, cal.startMidi]);
   const keys = useMemo(() => keyLayout(start, end), [start, end]);
   const [mode, setMode] = useState<Mode>('wait');
   const [speed, setSpeed] = useState(1);
@@ -285,7 +279,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   }, []);
 
   const st = g.current;
-  const upcoming = st.notes.filter((n) => n.state === 'pending').slice(0, 5);
+  const upcoming = st.notes.filter((n) => n.state === 'pending').slice(0, 4);
   const cur = upcoming[0];
   const highlights: Record<number, KeyHighlight> = {};
   if (upcoming[1] && upcoming[1].midi !== cur?.midi) highlights[upcoming[1].midi] = { color: 'rgba(255,255,255,0.35)', label: 'next' };
@@ -308,7 +302,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     <div className="game">
       <div className="game-bar">
         <button className="btn small ghost" onClick={onExit}>
-          ◀ Songs
+          ◀<span className="lbl"> Songs</span>
         </button>
         <div className="game-title">
           {song.emoji} {song.title}
@@ -316,7 +310,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         <div className="seg">
           {(['wait', 'play', 'demo'] as Mode[]).map((m) => (
             <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); setRunning(false); reset(); }}>
-              {m === 'wait' ? '🐢 Wait for me' : m === 'play' ? '🏃 Play along' : '👂 Listen'}
+              {m === 'wait' ? '🐢' : m === 'play' ? '🏃' : '👂'}
+              <span className="lbl">{m === 'wait' ? ' Wait for me' : m === 'play' ? ' Play along' : ' Listen'}</span>
             </button>
           ))}
         </div>
@@ -328,13 +323,14 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
           ))}
         </div>
         <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
-          <option value={0.5}>½ speed</option>
-          <option value={0.75}>¾ speed</option>
-          <option value={1}>full speed</option>
+          <option value={0.5}>½×</option>
+          <option value={0.75}>¾×</option>
+          <option value={1}>1×</option>
         </select>
         <div className="score">
           ✅ {st.hits}/{total} {st.streak >= 3 && <span>🔥{st.streak}</span>}
         </div>
+        <FullscreenButton />
       </div>
 
       <div className="highway-wrap">
@@ -348,8 +344,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                 {pitchClassName(n.midi)}
               </span>
               <span className="next-meta">
-                {n.left ? '✋L' : 'R🤚'} {n.beats >= 2 ? '𝅗𝅥 long' : n.beats < 1 ? '♪ quick' : '♩'}
-                {n.dyn === 'f' ? ' 💥loud' : n.dyn === 'p' ? ' 🌙soft' : ''}
+                {n.left ? 'L' : 'R'} {n.beats >= 2 ? '𝅗𝅥' : n.beats < 1 ? '♪' : '♩'}
+                {n.dyn === 'f' ? ' 💥' : n.dyn === 'p' ? ' 🌙' : ''}
               </span>
             </div>
           ))}
@@ -404,7 +400,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         end={end}
         highlights={highlights}
         pressed={pressed}
-        height="min(30vh, 220px)"
+        height="min(34dvh, 240px)"
         onPress={(m) => {
           playNote(m, 1.2, 0.7);
           setTouchDown((s) => new Set(s).add(m));
@@ -428,4 +424,18 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
       <div className="heard-line muted small">{heard !== null ? `🎤 hearing ${midiName(heard)}` : '🎤 listening'}</div>
     </div>
   );
+}
+
+/**
+ * Keyboard range for a song: the usual 2 octaves, widened to whole octaves
+ * (C to C) when the song needs lower or higher keys.
+ */
+export function songRange(song: Song, base: number): [number, number] {
+  const ms = song.notes.filter((n) => n.midi !== null).map((n) => n.midi!);
+  if (!ms.length) return [base, base + 24];
+  const lo = Math.min(...ms);
+  const hi = Math.max(...ms);
+  const start = Math.min(base, lo - (((lo % 12) + 12) % 12));
+  const end = Math.max(base + 24, hi + ((12 - (hi % 12)) % 12));
+  return [start, end];
 }
