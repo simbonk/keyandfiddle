@@ -47,8 +47,13 @@ input {
 .app {
   display: flex;
   flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 100%;
   height: 100dvh;
+  height: var(--app-h, 100dvh);
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
@@ -2369,12 +2374,12 @@ select option {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
   z-index: 61;
   display: flex;
-  align-items: center;
-  padding: 0 8px env(safe-area-inset-bottom);
-  background: var(--bg);
+  align-items: flex-start;
+  padding: 8px 6px env(safe-area-inset-bottom);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 8, 32, 0.96);
 }
 .touch-violin.tv-bottombar.flipped {
   transform: rotate(180deg);
@@ -2382,8 +2387,30 @@ select option {
 .tv-bottombar .game-bar {
   width: 100%;
   margin: 0;
+  padding: 0;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 0;
+  align-items: stretch;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.tv-bottombar .game-bar .mode-seg {
+  display: contents;
+}
+.tv-bottombar .game-bar .opts-wrap {
+  flex: 1 1 0;
+  display: flex;
+}
+.tv-bottombar .game-bar .score {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 15px;
+  font-weight: 800;
+  padding-bottom: 14px;
 }
 .tv-bottombar .game-bar .lbl,
 .tv-bottombar .game-bar .game-title {
@@ -2415,40 +2442,65 @@ select option {
    sit at the bottom as a tab bar in thumb reach (iPad keeps them on top). */
 .tabbar {
   flex-shrink: 0;
-  padding: 6px 10px 4px;
+  /* the bar runs to the bottom edge; its buttons sit above the home indicator */
+  padding: 8px 6px calc(env(safe-area-inset-bottom) + 12px);
+  margin-bottom: calc(-1 * env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 6, 30, 0.55);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(12, 8, 32, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .app.playing > .tabbar {
   display: none;
 }
 .tabbar .subnav {
-  gap: 4px;
+  gap: 0;
+  justify-content: space-around;
 }
-.tabbar .subnav button {
+.tabbar .subnav button,
+.tv-bottombar .game-bar .btn.small,
+.tv-bottombar .game-bar .mode-seg button {
   flex: 1 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 4px 2px;
-  min-height: 50px;
+  gap: 4px;
+  padding: 0;
+  min-height: 0;
   border: 0;
+  border-radius: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.62);
   line-height: 1.1;
 }
-.tabbar .subnav button.on {
+/* the icon sits in a soft pill; the pill lights up on the chosen one */
+.tabbar .subnav .ic,
+.tv-bottombar .game-bar .btn.small .ic,
+.tv-bottombar .game-bar .mode-seg button .ic {
+  width: 26px;
+  height: 26px;
+  padding: 5px 17px;
+  box-sizing: content-box;
+  border-radius: 999px;
+}
+.tabbar .subnav button.on,
+.tv-bottombar .game-bar .mode-seg button.on,
+.tv-bottombar .game-bar .btn.small.primary {
   background: transparent;
   color: var(--primary);
 }
-.tabbar .subnav .nm {
-  font-size: 11px;
+.tabbar .subnav button.on .ic,
+.tv-bottombar .game-bar .mode-seg button.on .ic,
+.tv-bottombar .game-bar .btn.small.primary .ic {
+  background: rgba(255, 209, 59, 0.18);
+}
+.tabbar .subnav .nm,
+.tv-bottombar .game-bar .lbl {
+  font-size: 12.5px !important;
+  font-weight: 700;
   white-space: nowrap;
 }
 @media (max-width: 600px) and (orientation: portrait) {
@@ -2621,4 +2673,19 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* the play bar has more buttons than the tab bar: slimmer pills */
+.tv-bottombar .game-bar .btn.small .ic,
+.tv-bottombar .game-bar .mode-seg button .ic {
+  width: 24px;
+  height: 24px;
+  padding: 5px 11px;
+}
+.tv-bottombar .game-bar .btn.small,
+.tv-bottombar .game-bar .mode-seg button {
+  gap: 4px !important;
+  padding: 0 !important;
+}
+.tv-bottombar .game-bar > .btn.small:not(:has(.lbl)) {
+  display: none;
 }

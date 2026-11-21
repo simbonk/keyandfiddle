@@ -13,6 +13,7 @@ import { STRINGS, VIOLIN_SONGS, violinNotes } from "../theory";
 import type { VNoteState } from "../violinHighway";
 import { RotateTip, isPhone } from "./RotateTip";
 import { Icon } from "../../ui/Icon";
+import { safeBottom, screenSize } from "../../ui/viewport";
 import { loadViolin, sendStrings, silence, unlockAudio } from "./engine";
 import { MiniViolin } from "../MiniViolin";
 import {
@@ -130,7 +131,7 @@ const OPTS_KEY = "kf.tv.opts";
 /** px kept clear under the status bar when the violin is drawn sideways in portrait */
 const STATUS_BAR = 32;
 /** height of the bottom button bar on phones */
-const PHONE_BAR = 58;
+const PHONE_BAR = 66;
 interface StoredOpts extends ViolinOptions {
   names: boolean;
   /** strings further apart than a real violin */
@@ -258,11 +259,10 @@ function TouchViolinPlay({
   // Portrait screen (rotation locked) held sideways: draw the whole violin
   // screen turned a quarter, so it never jumps when the iPad tilts.
   const [vp, setVp] = useState(() => ({
-    w: window.innerWidth,
-    h: window.innerHeight,
+    ...screenSize(),
   }));
   useEffect(() => {
-    const on = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    const on = () => setVp(screenSize());
     window.addEventListener("resize", on);
     window.addEventListener("orientationchange", on);
     return () => {
@@ -275,7 +275,8 @@ function TouchViolinPlay({
   // phones held like a violin: the buttons sit in a bar along the bottom
   // of the screen, so the tracks get the whole width
   const phoneBar = rot !== "none" && vp.w < 600;
-  const barH = phoneBar ? PHONE_BAR : 0;
+  // the bar runs under the home indicator too
+  const barH = phoneBar ? PHONE_BAR + safeBottom() : 0;
   const frame: React.CSSProperties =
     rot === "none"
       ? {}
@@ -935,7 +936,7 @@ function TouchViolinPlay({
       {phoneBar && (
         <div
           className={`touch-violin tv-bottombar ${rot === "ccw" ? "flipped" : ""}`}
-          style={{ height: PHONE_BAR }}
+          style={{ height: barH, top: vp.h - barH }}
         >
           {bar}
         </div>
