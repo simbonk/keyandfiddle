@@ -13,6 +13,7 @@ import { STRINGS, VIOLIN_SONGS, violinNotes } from "../theory";
 import type { VNoteState } from "../violinHighway";
 import { RotateTip } from "./RotateTip";
 import { loadViolin, sendStrings, silence, unlockAudio } from "./engine";
+import { MiniViolin } from "../MiniViolin";
 import {
   type DrawTargets,
   type ViolinOptions,
@@ -80,6 +81,7 @@ export function ViolinSounds() {
   const voice = useViolinVoice();
   return (
     <div className="lesson">
+      <MiniViolin />
       <SoundLab
         keys={false}
         title="Pick how your violin sounds"
