@@ -41,11 +41,18 @@ export function useImportedScores(): StoredScore[] {
   );
 }
 
-export async function addScoreFile(file: File): Promise<StoredScore> {
-  const s = await importScoreFile(file.name, await file.arrayBuffer());
+export function saveScore(s: ImportedScore): StoredScore {
   const stored: StoredScore = { ...s, id: Math.random().toString(36).slice(2, 10), createdAt: Date.now() };
   save([stored, ...load()]);
   return stored;
+}
+
+export async function addScoreFile(file: File): Promise<StoredScore> {
+  return saveScore(await importScoreFile(file.name, await file.arrayBuffer()));
+}
+
+export function isPicture(file: File) {
+  return file.type.startsWith('image/') || /\.(png|jpe?g|heic|heif|webp|gif|bmp)$/i.test(file.name);
 }
 
 export function removeScore(id: string) {

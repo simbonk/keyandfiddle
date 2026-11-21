@@ -1376,3 +1376,53 @@ select option {
   box-shadow: 0 0 12px rgba(255, 207, 51, 0.8);
   font-size: 18px;
 }
+
+/* photo sheet-music import */
+.pi-sheet {
+  position: relative;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 10px 0;
+}
+.pi-sheet img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pi-sheet svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pi-sheet svg.adding {
+  cursor: crosshair;
+}
+.pi-dot {
+  fill: rgba(255, 80, 160, 0.12);
+  stroke: #ff3d9a;
+  cursor: pointer;
+}
+.pi-dot.left {
+  fill: rgba(40, 140, 255, 0.12);
+  stroke: #1e88ff;
+}
+.pi-dot.on {
+  fill: rgba(255, 207, 51, 0.55);
+  stroke: #e0a800;
+}
+.pi-label {
+  fill: #7a1a8c;
+  font-weight: 800;
+  text-anchor: middle;
+  pointer-events: none;
+}
+.pi-edit {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel, #241a52);
+  padding: 8px;
+  border-radius: 12px;
+}

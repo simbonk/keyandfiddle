@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Song } from '../audio/notes';
-import { addScoreFile, removeScore, scoreToSong, useImportedScores } from './importedSongs';
+import { PhotoImport } from '../omr/PhotoImport';
+import { addScoreFile, isPicture, removeScore, scoreToSong, useImportedScores } from './importedSongs';
 
 const LEVELS: { level: 1 | 2 | 3; name: string; emoji: string }[] = [
   { level: 1, name: 'Beginner', emoji: '🌱' },
@@ -28,8 +29,15 @@ export function SongPicker({
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
   const onFile = async (f: File | undefined) => {
     if (!f) return;
+    if (isPicture(f)) {
+      setMsg(null);
+      setPhoto(f);
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
@@ -59,6 +67,17 @@ export function SongPicker({
       </button>
     );
   };
+  if (photo)
+    return (
+      <PhotoImport
+        file={photo}
+        onCancel={() => setPhoto(null)}
+        onDone={(sc) => {
+          setPhoto(null);
+          setMsg({ text: `Added “${sc.title}” (${sc.notes.length} notes). Tap it below to play.`, bad: false });
+        }}
+      />
+    );
   return (
     <div className="panel">
       <h2>Pick a song</h2>
@@ -97,14 +116,15 @@ export function SongPicker({
             <button className="song-card import-card" disabled={busy} onClick={() => fileRef.current?.click()}>
               <span className="song-emoji">{busy ? '⏳' : '➕'}</span>
               <b>Import sheet music</b>
-              <span className="muted small">MusicXML (.musicxml, .mxl) or MIDI (.mid) file</span>
+              <span className="muted small">A photo or screenshot of printed music, or a MusicXML / MIDI file</span>
             </button>
           </div>
           <input ref={fileRef} type="file" hidden onChange={(e) => onFile(e.target.files?.[0])} />
           {msg && <div className={`toast ${msg.bad ? 'warn' : 'good'}`}>{msg.text}</div>}
           <p className="muted small">
-            Tip: most sheet music apps (MuseScore, Flat, Noteflight, or a scanner app that reads a photo of the page) can
-            export MusicXML or MIDI. Your files stay on this device.
+            Photos and screenshots: I read printed music and show you what I found, so you can fix anything before
+            saving. Clear, straight screenshots work best. MusicXML or MIDI files from a sheet music app are the most
+            accurate. Everything stays on this device.
           </p>
         </section>
       )}

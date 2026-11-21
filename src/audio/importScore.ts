@@ -12,7 +12,7 @@ export interface ImportedScore {
   melody: SongNote[];
 }
 
-interface RawNote {
+export interface RawNote {
   midi: number;
   beat: number;
   beats: number;
@@ -38,13 +38,13 @@ export async function importScoreFile(name: string, data: ArrayBuffer): Promise<
   if (/<score-(partwise|timewise)/.test(text)) return finish(parseMusicXml(text), base);
   if (/^%PDF/.test(text)) {
     throw new Error(
-      "That's a PDF. I can't read printed music yet, but most sheet music apps (MuseScore, Flat, Noteflight, or a scanner app like PlayScore) can save it as MusicXML or MIDI, which I can read.",
+      "That's a PDF, which I can't open yet. Take a screenshot of the page and import the picture instead, or save it as MusicXML or MIDI from a sheet music app.",
     );
   }
-  throw new Error("I couldn't read that file. Try a MusicXML (.musicxml, .xml, .mxl) or MIDI (.mid) file.");
+  throw new Error("I couldn't read that file. Try a photo or screenshot of the music, a MusicXML file (.musicxml, .xml, .mxl), or a MIDI file (.mid).");
 }
 
-function finish(r: { title?: string; bpm: number; notes: RawNote[] }, fallback: string): ImportedScore {
+export function finish(r: { title?: string; bpm: number; notes: RawNote[] }, fallback: string): ImportedScore {
   const raw = r.notes.filter((n) => n.beats > 0.01);
   if (!raw.length) throw new Error('I found no notes in that file.');
   const first = Math.min(...raw.map((n) => n.beat));
