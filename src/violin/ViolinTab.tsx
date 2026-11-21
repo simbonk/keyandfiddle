@@ -16,16 +16,20 @@ export function ViolinTab() {
       <TopBarSlot>
         <nav className="subnav">
           <button className={view === 'touch' ? 'on' : ''} onClick={() => setView('touch')}>
-            📱 Touch violin
+            <span className="ico">📱</span>
+            <span className="nm"> Touch violin</span>
           </button>
           <button className={view === 'songs' ? 'on' : ''} onClick={() => setView('songs')}>
-            🎻 Real violin
+            <span className="ico">🎻</span>
+            <span className="nm"> Real violin</span>
           </button>
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
-            🎤 Sounds
+            <span className="ico">🎤</span>
+            <span className="nm"> Sounds</span>
           </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
-            ⚙️<span className="lbl"> Settings</span>
+            <span className="ico">⚙️</span>
+            <span className="nm"> Settings</span>
           </button>
         </nav>
       </TopBarSlot>

@@ -24,13 +24,16 @@ export function PianoTab() {
       <TopBarSlot>
         <nav className="subnav">
           <button className={view === 'play' || view === 'record' ? 'on' : ''} onClick={() => setView('play')}>
-            🎵 Songs
+            <span className="ico">🎵</span>
+            <span className="nm"> Songs</span>
           </button>
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
-            🎤 Sounds
+            <span className="ico">🎤</span>
+            <span className="nm"> Sounds</span>
           </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
-            ⚙️<span className="lbl"> Settings</span>
+            <span className="ico">⚙️</span>
+            <span className="nm"> Settings</span>
           </button>
         </nav>
       </TopBarSlot>

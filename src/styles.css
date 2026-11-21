@@ -2409,3 +2409,57 @@ select option {
   flex-wrap: wrap;
   justify-content: center;
 }
+
+/* iPhone held upright: the app menu sits at the bottom, in thumb reach (iPad keeps it on top) */
+@media (max-width: 600px) and (orientation: portrait) {
+  .app > .topbar {
+    order: 2;
+    padding: 6px 10px 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(10, 6, 30, 0.35);
+  }
+  .app > .main {
+    padding-top: 8px;
+  }
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  /* tab-bar style: icon over a small name, equal widths, everything fits */
+  .app > .topbar {
+    gap: 6px;
+  }
+  .app > .topbar .fs-top {
+    display: none;
+  }
+  .app > .topbar .subnav-slot {
+    overflow: visible;
+  }
+  .app > .topbar .subnav {
+    gap: 4px;
+  }
+  .app > .topbar .subnav button {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 3px 2px;
+    min-height: 48px;
+    border-radius: 12px;
+    line-height: 1.1;
+  }
+  .app > .topbar .subnav .ico {
+    font-size: 20px;
+  }
+  .app > .topbar .subnav .nm {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .app > .topbar .tabs button {
+    padding: 4px 10px;
+  }
+}
