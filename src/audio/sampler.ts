@@ -23,7 +23,24 @@ export interface MySound {
 
 export const MAX_MY_SOUNDS = 6;
 export const MAX_SAMPLE_SEC = 3;
-export const SOUND_EMOJIS = ['🤧', '😮‍💨', '👏', '🎤', '🐶', '🐱', '🦆', '🐸', '🐷', '🦁', '🤖', '👻', '💥', '🥁', '😂', '🍕'];
+export const SOUND_EMOJIS = [
+  '🤧',
+  '😮‍💨',
+  '👏',
+  '🎤',
+  '🐶',
+  '🐱',
+  '🦆',
+  '🐸',
+  '🐷',
+  '🦁',
+  '🤖',
+  '👻',
+  '💥',
+  '🥁',
+  '😂',
+  '🍕',
+];
 
 // ---------- storage (IndexedDB: localStorage is too small for audio) ----------
 
@@ -140,17 +157,31 @@ export interface RecordHandle {
 }
 
 /**
- * Listen until the child makes a sound, keep up to two seconds of it, and stop
+ * Listen until the child makes a sound, keep up to three seconds of it, and stop
  * by itself once it goes quiet again. Must be started from a tap on iOS.
+ *
+ * iPads can feed an already-running AudioContext silence from the mic (the
+ * context was made for playback before the mic was switched on, often at a
+ * different sample rate). So recording gets its own fresh AudioContext, made
+ * during the tap, and a MediaRecorder runs alongside as a backup: if the live
+ * audio stays dead silent, the MediaRecorder's copy is decoded and used instead.
  */
 export function recordSound(onLevel: (level: number, heard: boolean) => void): RecordHandle {
   let stopNow = () => undefined as void;
+  // made synchronously inside the tap so iOS lets it run
+  const Ctor: typeof AudioContext =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  let cap: AudioContext | null = null;
+  try {
+    cap = new Ctor();
+    cap.resume().catch(() => undefined);
+  } catch {
+    cap = null;
+  }
   const done = (async (): Promise<RecordOutcome> => {
-    const ctx = getAudioContext();
-    await ctx.resume().catch(() => undefined);
     let stream = mic.stream;
     let own = false;
-    if (!stream || !stream.active) {
+    if (!stream || !stream.active || stream.getAudioTracks().every((t) => t.readyState !== 'live')) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           // auto gain on: iPad mics are much quieter than iPhone ones
@@ -158,10 +189,27 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
         });
         own = true;
       } catch (e) {
+        cap?.close().catch(() => undefined);
         const n = (e as DOMException)?.name;
         return { ok: false, reason: n === 'NotAllowedError' || n === 'SecurityError' ? 'denied' : 'error' };
       }
     }
+    const ctx = cap ?? getAudioContext();
+    await ctx.resume().catch(() => undefined);
+
+    // backup copy of the raw mic, independent of Web Audio
+    let rec: MediaRecorder | null = null;
+    const recChunks: Blob[] = [];
+    try {
+      if (typeof MediaRecorder !== 'undefined') {
+        rec = new MediaRecorder(stream);
+        rec.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
+        rec.start();
+      }
+    } catch {
+      rec = null;
+    }
+
     const src = ctx.createMediaStreamSource(stream);
     const proc = ctx.createScriptProcessor(2048, 1, 1);
     const mute = ctx.createGain();
@@ -169,19 +217,24 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
     src.connect(proc);
     proc.connect(mute).connect(ctx.destination);
 
+    const gain = own ? 1 : mic.boost;
     const sr = ctx.sampleRate;
     const chunks: Float32Array[] = [];
     let total = 0;
     let startedAt = -1; // sample index where the sound began
     let quietFor = 0;
     let noise = 0.002;
+    let anySignal = false; // false = the live audio is digital silence (the iPad problem)
+    const t0 = performance.now();
 
     const result = await new Promise<Float32Array | null>((resolve) => {
       let finished = false;
-      const finish = (ok: boolean) => {
+      let timer = 0;
+      const finish = () => {
         if (finished) return;
         finished = true;
-        if (!ok || startedAt < 0) return resolve(null);
+        clearInterval(timer);
+        if (startedAt < 0) return resolve(null);
         const all = new Float32Array(total);
         let o = 0;
         for (const c of chunks) {
@@ -190,44 +243,64 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
         }
         resolve(all);
       };
-      stopNow = () => finish(true);
+      stopNow = finish;
+      // If no audio arrives at all, still finish: as a fixed 3-second take when
+      // the live audio is silent (MediaRecorder has the real copy), or give up after 10 s.
+      timer = window.setInterval(() => {
+        const el = performance.now() - t0;
+        if (!anySignal && rec && el > 3500) finish();
+        else if (el > 10000) finish();
+      }, 100);
       proc.onaudioprocess = (e) => {
         const x = e.inputBuffer.getChannelData(0);
         const c = new Float32Array(x);
         let sq = 0;
         for (let i = 0; i < c.length; i++) sq += c[i] * c[i];
-        const rms = Math.sqrt(sq / c.length) * (own ? 1 : mic.boost);
+        if (sq > 0) anySignal = true;
+        const rms = Math.sqrt(sq / c.length) * gain;
         const heard = startedAt >= 0;
         if (!heard) {
           // keep a short pre-roll only, so the start of the sound isn't clipped
           chunks.push(c);
           total += c.length;
           while (chunks.length > 8) total -= chunks.shift()!.length;
-          if (rms > Math.max(0.008, noise * 4)) startedAt = total - c.length;
+          if (rms > Math.max(0.006, noise * 4)) startedAt = total - c.length;
           else noise = noise * 0.9 + rms * 0.1;
         } else {
           chunks.push(c);
           total += c.length;
           // Only stop by itself after a real pause, so a whole word or phrase
           // ("hello!") is kept, not just its first syllable.
-          quietFor = rms < Math.max(0.004, noise * 1.8) ? quietFor + c.length : 0;
+          quietFor = rms < Math.max(0.003, noise * 1.8) ? quietFor + c.length : 0;
           const soFar = total - startedAt;
-          if ((quietFor > sr * 0.8 && soFar > sr * 0.8) || soFar > sr * MAX_SAMPLE_SEC) finish(true);
+          if ((quietFor > sr * 0.8 && soFar > sr * 0.8) || soFar > sr * MAX_SAMPLE_SEC) finish();
         }
         onLevel(Math.min(1, Math.sqrt(rms) * 3), startedAt >= 0);
       };
-      // give up if nothing is heard for a while
-      setTimeout(() => finish(true), 10000);
     });
 
     proc.onaudioprocess = null;
     src.disconnect();
     proc.disconnect();
+    const recorded = await stopRecorder(rec, recChunks);
     if (own) stream.getTracks().forEach((t) => t.stop());
-    if (!result) return { ok: false, reason: 'quiet' };
-    const shaped = shapeSample(result, sr);
+
+    let pcm = result;
+    let rate = sr;
+    if (!pcm || !anySignal) {
+      // live audio was silent or missed it: fall back to the MediaRecorder copy
+      const dec = recorded ? await decodeBlob(recorded) : null;
+      if (dec) {
+        pcm = dec.data;
+        rate = dec.rate;
+      }
+    }
+    if (cap) cap.close().catch(() => undefined);
+    if (!pcm) return { ok: false, reason: 'quiet' };
+    const shaped = shapeSample(pcm, rate);
     if (!shaped) return { ok: false, reason: 'quiet' };
-    const { root, pitched } = findRoot(shaped, sr);
+    const sr2 = rate;
+    const { root, pitched } = findRoot(shaped, sr2);
     const n = sounds.length;
     const sound: MySound = {
       id: `s${Date.now().toString(36)}`,
@@ -235,13 +308,43 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
       emoji: pitched ? '🎤' : SOUND_EMOJIS[n % 3 === 0 ? 0 : n % 3 === 1 ? 2 : 1],
       root,
       pitched,
-      rate: sr,
+      rate: sr2,
       data: shaped,
       created: Date.now(),
     };
     return { ok: true, sound };
   })().catch((): RecordOutcome => ({ ok: false, reason: 'error' }));
   return { stop: () => stopNow(), done };
+}
+
+function stopRecorder(rec: MediaRecorder | null, chunks: Blob[]): Promise<Blob | null> {
+  if (!rec || rec.state === 'inactive') return Promise.resolve(chunks.length ? new Blob(chunks) : null);
+  return new Promise((resolve) => {
+    const done = () => resolve(chunks.length ? new Blob(chunks, { type: rec.mimeType || undefined }) : null);
+    rec.onstop = done;
+    setTimeout(done, 1500);
+    try {
+      rec.stop();
+    } catch {
+      done();
+    }
+  });
+}
+
+async function decodeBlob(b: Blob): Promise<{ data: Float32Array; rate: number } | null> {
+  try {
+    const buf = await getAudioContext().decodeAudioData(await b.arrayBuffer());
+    const d = buf.getChannelData(0);
+    let any = false;
+    for (let i = 0; i < d.length; i += 64)
+      if (d[i] !== 0) {
+        any = true;
+        break;
+      }
+    return any ? { data: new Float32Array(d), rate: buf.sampleRate } : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Trim silence, cap the length, make it loud and click-free. */
