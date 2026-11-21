@@ -196,7 +196,7 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
         const c = new Float32Array(x);
         let sq = 0;
         for (let i = 0; i < c.length; i++) sq += c[i] * c[i];
-        const rms = Math.sqrt(sq / c.length);
+        const rms = Math.sqrt(sq / c.length) * (own ? 1 : mic.boost);
         const heard = startedAt >= 0;
         if (!heard) {
           // keep a short pre-roll only, so the start of the sound isn't clipped

@@ -1,4 +1,5 @@
-import { mic } from '../audio/mic';
+import { useState } from 'react';
+import { MIC_BOOSTS, mic } from '../audio/mic';
 import { useMicStatus } from '../audio/hooks';
 
 /** Shows a big friendly "turn on the microphone" button until the mic is running. */
@@ -29,5 +30,29 @@ export function LevelMeter({ level }: { level: number }) {
     <div className="meter" aria-label="sound level">
       <div className="meter-fill" style={{ width: `${pct}%` }} />
     </div>
+  );
+}
+
+/** Mic sensitivity: iPad mics are quiet, so they start boosted. */
+export function MicBoostSelect() {
+  const [boost, setBoost] = useState(mic.boost);
+  return (
+    <label className="mic-boost muted small">
+      🎤 Mic boost{' '}
+      <select
+        value={boost}
+        onChange={(e) => {
+          mic.setBoost(Number(e.target.value));
+          setBoost(mic.boost);
+        }}
+        aria-label="microphone boost"
+      >
+        {MIC_BOOSTS.map((b) => (
+          <option key={b} value={b}>
+            {b === 1 ? 'Off' : `${b}×`}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -20,10 +20,29 @@ export interface PitchFrame {
 
 type Listener = (f: PitchFrame) => void;
 
+/** iPads (including ones that report as a Mac) have much quieter mics than iPhones. */
+function isIPad(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+export const MIC_BOOSTS = [1, 2, 4, 8];
+function savedBoost(): number {
+  try {
+    const v = Number(localStorage.getItem('kf.micBoost'));
+    if (MIC_BOOSTS.includes(v)) return v;
+  } catch {
+    /* ignore */
+  }
+  return isIPad() ? 4 : 1;
+}
+
 export class MicEngine {
   ctx: AudioContext | null = null;
   stream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
+  private boostNode: GainNode | null = null;
+  /** Extra software gain on the mic before listening (quiet iPad mics). */
+  boost = savedBoost();
   private buf: Float32Array<ArrayBuffer> = new Float32Array(2048);
   private detector: PitchDetector | null = null;
   private listeners = new Set<Listener>();
@@ -72,7 +91,10 @@ export class MicEngine {
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 2048;
         analyser.smoothingTimeConstant = 0;
-        src.connect(analyser);
+        const boost = ctx.createGain();
+        boost.gain.value = this.boost;
+        this.boostNode = boost;
+        src.connect(boost).connect(analyser);
         this.ctx = ctx;
         this.stream = stream;
         this.analyser = analyser;
@@ -130,6 +152,17 @@ export class MicEngine {
       return true;
     }
     return false;
+  }
+
+  setBoost(b: number) {
+    this.boost = b;
+    if (this.boostNode) this.boostNode.gain.value = b;
+    try {
+      localStorage.setItem('kf.micBoost', String(b));
+    } catch {
+      /* ignore */
+    }
+    this.statusListeners.forEach((l) => l());
   }
 
   subscribe(l: Listener) {

@@ -1564,3 +1564,10 @@ select option {
   justify-content: space-between;
   align-items: center;
 }
+.mic-boost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  white-space: nowrap;
+}

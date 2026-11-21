@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePitchListener, usePitchState } from '../audio/hooks';
 import { centsBetween, freqToMidiFloat, isBlackKey, midiName, midiToFreq } from '../audio/notes';
 import { playNote } from '../audio/synth';
-import { LevelMeter, MicGate } from '../ui/MicButton';
+import { LevelMeter, MicBoostSelect, MicGate } from '../ui/MicButton';
 import { Keyboard } from './Keyboard';
 import { type CapFrame, analyzeCapture, currentGuess } from './captureKey';
 import { type PianoCalibration, keyOffsetCents, saveCalibration } from './calibration';
@@ -188,6 +188,7 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
         />
         <div className="listen-row">
           <LevelMeter level={frame?.rms ?? 0} />
+          <MicBoostSelect />
           <span className="muted">
             {heardFreq ? `hearing ${midiName(Math.round(freqToMidiFloat(heardFreq)))}` : 'listening…'}
             {cents !== null && Math.abs(cents) < 150 ? ` (${cents > 0 ? '+' : ''}${Math.round(cents)}¢)` : ''}

@@ -12,6 +12,7 @@ import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
 import { SoundSelect } from './SoundLab';
+import { MicBoostSelect } from '../ui/MicButton';
 import { PIANO_SONGS, tagHas } from './songs';
 
 type Mode = 'wait' | 'play' | 'demo';
@@ -543,7 +544,9 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
           if (h && h.touch && h.note.midi === m) finishHold(performance.now());
         }}
       />
-      <div className="heard-line muted small">{heard !== null ? `🎤 hearing ${midiName(heard)}` : '🎤 listening'}</div>
+      <div className="heard-line muted small">
+        {heard !== null ? `🎤 hearing ${midiName(heard)}` : '🎤 listening'} <MicBoostSelect />
+      </div>
     </div>
   );
 }
