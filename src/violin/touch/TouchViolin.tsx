@@ -95,7 +95,7 @@ export function ViolinSounds() {
 }
 
 /** Compact sound chooser for the options popover. */
-function VoiceSelect() {
+export function VoiceSelect() {
   const voice = useViolinVoice();
   const mine = useMySounds();
   return (

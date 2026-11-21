@@ -1,48 +1,52 @@
 import { FINGER_COLORS, STRINGS, stopFraction, type BowStroke, type Fingering } from './theory';
 
-/** Flat fingerboard picture: nut on the left, strings G (top) to E (bottom). */
+/**
+ * Fingerboard as the player sees it, looking down the neck from the chin rest:
+ * the scroll is far away (top), strings G D A E run left to right just like the
+ * note lanes above, and fingers go down the board toward you.
+ */
 export function FingerboardMap({ fing, next }: { fing: Fingering | null; next?: Fingering | null }) {
-  const W = 360;
-  const H = 110;
-  const nutX = 34;
-  const scale = (W - nutX - 10) / stopFraction(8); // show up to ~8 semitones
-  const y = (s: number) => 20 + s * 23;
-  const x = (semis: number) => nutX + stopFraction(semis) * scale;
+  const W = 190;
+  const H = 200;
+  const nutY = 30;
+  const scale = (H - nutY - 12) / stopFraction(8); // show up to ~8 semitones
+  const x = (s: number) => 40 + s * 37;
+  const y = (semis: number) => nutY + stopFraction(semis) * scale;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="fb-map" aria-label="fingerboard">
-      <rect x={nutX} y={8} width={W - nutX - 6} height={H - 16} rx={8} fill="#1b1b1b" />
-      <rect x={nutX - 6} y={8} width={6} height={H - 16} fill="#f2d7a8" />
+      <rect x={22} y={nutY} width={147} height={H - nutY - 4} rx={8} fill="#1b1b1b" />
+      <rect x={22} y={nutY - 6} width={147} height={6} fill="#f2d7a8" />
       {[2, 4, 5, 7].map((s, i) => (
         <g key={s}>
-          <line x1={x(s)} x2={x(s)} y1={10} y2={H - 10} stroke="rgba(255,255,255,0.35)" strokeWidth={3} />
-          <text x={x(s)} y={H - 1} textAnchor="middle" className="fb-tape">
+          <line x1={24} x2={167} y1={y(s)} y2={y(s)} stroke="rgba(255,255,255,0.35)" strokeWidth={3} />
+          <text x={12} y={y(s) + 4} textAnchor="middle" className="fb-tape">
             {i + 1}
           </text>
         </g>
       ))}
       {STRINGS.map((s, i) => (
         <g key={s.name}>
-          <line x1={nutX} x2={W - 6} y1={y(i)} y2={y(i)} stroke={fing?.string === i ? s.color : '#bbb'} strokeWidth={fing?.string === i ? 3.5 : 1.5} />
-          <text x={12} y={y(i) + 5} textAnchor="middle" fill={s.color} className="fb-str">
+          <line x1={x(i)} x2={x(i)} y1={nutY} y2={H - 6} stroke={fing?.string === i ? s.color : '#bbb'} strokeWidth={fing?.string === i ? 3.5 : 1.5} />
+          <text x={x(i)} y={16} textAnchor="middle" fill={s.color} className="fb-str">
             {s.name}
           </text>
         </g>
       ))}
       {next && next.finger > 0 && (
-        <circle cx={x(next.semis) - 8} cy={y(next.string)} r={9} fill="none" stroke="rgba(255,255,255,0.6)" strokeDasharray="3 3" strokeWidth={2} />
+        <circle cx={x(next.string)} cy={y(next.semis) - 8} r={9} fill="none" stroke="rgba(255,255,255,0.6)" strokeDasharray="3 3" strokeWidth={2} />
       )}
       {fing &&
         (fing.finger === 0 ? (
           <g className="pulse">
-            <rect x={nutX + 4} y={y(fing.string) - 9} width={W - nutX - 14} height={18} rx={9} fill="none" stroke={STRINGS[fing.string].color} strokeWidth={3} />
-            <text x={W / 2} y={y(fing.string) + 5} textAnchor="middle" className="fb-open">
+            <rect x={x(fing.string) - 10} y={nutY + 4} width={20} height={H - nutY - 14} rx={10} fill="none" stroke={STRINGS[fing.string].color} strokeWidth={3} />
+            <text x={W / 2 + 6} y={H - 14} textAnchor="middle" className="fb-open">
               open {STRINGS[fing.string].name}: no fingers!
             </text>
           </g>
         ) : (
           <g className="pulse">
-            <circle cx={x(fing.semis) - 8} cy={y(fing.string)} r={12} fill={FINGER_COLORS[fing.finger]} />
-            <text x={x(fing.semis) - 8} y={y(fing.string) + 5} textAnchor="middle" className="fb-num">
+            <circle cx={x(fing.string)} cy={y(fing.semis) - 8} r={12} fill={FINGER_COLORS[fing.finger]} />
+            <text x={x(fing.string)} y={y(fing.semis) - 3} textAnchor="middle" className="fb-num">
               {fing.finger}
             </text>
           </g>

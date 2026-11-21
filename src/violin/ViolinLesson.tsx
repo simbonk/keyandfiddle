@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { usePitchListener } from '../audio/hooks';
 import { mic } from '../audio/mic';
 import { centsBetween, midiName, midiToFreq, songLengthBeats, type Song } from '../audio/notes';
-import { playNote } from '../audio/synth';
 import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
 import { BowMap, FingerboardMap } from './FingerboardMap';
+import { MicBoostSelect } from '../ui/MicButton';
+import { ViolinTuner } from './ViolinTuner';
+import { VoiceSelect } from './touch/TouchViolin';
+import { loadViolin, playBowedNote } from './touch/engine';
 import { STRINGS, VIOLIN_SONGS, violinNotes } from './theory';
 import { type VNoteState, drawViolinHighway } from './violinHighway';
 
@@ -38,6 +41,12 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [speed, setSpeed] = useState(0.75);
+  const [showOpts, setShowOpts] = useState(false);
+  const [tuning, setTuning] = useState(false);
+  const [micErr, setMicErr] = useState<string | null>(null);
+  useEffect(() => {
+    loadViolin();
+  }, []);
   const [feedback, setFeedback] = useState<{ text: string; tone: string; id: number } | null>(null);
   const [, force] = useState(0);
 
@@ -174,7 +183,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
             n.state = 'hit';
             n.quality = 'good';
             n.holdFrac = 1;
-            playNote(n.midi, (n.beats * beatMs) / 1000 - 0.03, 0.8, 'violin');
+            playBowedNote(n.fing.string, n.midi, (n.beats * beatMs) / 1000 - 0.03, n.bow.dir === 'down');
           }
         });
       }
@@ -217,7 +226,16 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
   const stars = !total ? 0 : st.hits === total && st.inTune / total > 0.7 ? 3 : st.hits / total > 0.7 ? 2 : 1;
 
   const start = async () => {
-    if (mode !== 'demo') await mic.start();
+    if (mode !== 'demo') {
+      await mic.start().catch(() => undefined);
+      if (mic.status === 'running') setMicErr(null);
+      else {
+        setMicErr(
+          "I couldn't turn on the microphone. Allow the mic for this site (Settings app → Safari → Microphone), or use 👂 Listen.",
+        );
+        return;
+      }
+    }
     if (done || !pending()) reset();
     setRunning(true);
   };
@@ -247,9 +265,56 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
         <div className="score">
           🎯 {st.hits}/{total}
         </div>
+        <div className="opts-wrap">
+          <button
+            className={`btn small ${showOpts ? 'primary' : 'ghost'}`}
+            onClick={() => setShowOpts((o) => !o)}
+            aria-expanded={showOpts}
+          >
+            ⚙️<span className="lbl"> Options</span>
+          </button>
+          {showOpts && (
+            <>
+              <div className="opts-scrim" onClick={() => setShowOpts(false)} />
+              <div className="opts-pop" role="dialog" aria-label="Song options">
+                <div className="opt-row">
+                  <span>Sound for 👂 Listen</span>
+                  <VoiceSelect />
+                </div>
+                <div className="opt-row">
+                  <span>Mic boost</span>
+                  <MicBoostSelect bare />
+                </div>
+                <div className="opt-row">
+                  <span>Tune my violin</span>
+                  <button
+                    className="btn small"
+                    onClick={() => {
+                      setShowOpts(false);
+                      setRunning(false);
+                      setTuning(true);
+                    }}
+                  >
+                    🎚️ Tuner
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
         <FullscreenButton />
       </div>
 
+      {tuning && (
+        <div className="modal-scrim" onClick={() => setTuning(false)}>
+          <div className="modal panel" role="dialog" aria-label="Tune" onClick={(e) => e.stopPropagation()}>
+            <ViolinTuner onDone={() => setTuning(false)} />
+            <button className="btn ghost" onClick={() => setTuning(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
       <div className="lesson-body">
         <div className="lesson-track">
           <div className="highway-wrap">
@@ -261,8 +326,12 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
             )}
             {!running && !done && (
               <div className="overlay-center">
+                {mode !== 'demo' && st.songBeat <= -3 && (
+                  <p className="muted small">🎤 I'll ask to use the microphone so I can hear your violin.</p>
+                )}
+                {micErr && mode !== 'demo' && <div className="toast warn">{micErr}</div>}
                 <button className="btn big primary" onClick={start}>
-                  {st.songBeat > -3 ? '▶ Keep going' : mode === 'demo' ? '👂 Listen to it' : '▶ Start'}
+                  {st.songBeat > -3 ? '▶ Keep going' : mode === 'demo' ? '👂 Listen to it' : '🎤 Start: turn on the mic'}
                 </button>
                 <p className="muted small">
                   {mode === 'wait' ? 'Each note waits until I hear it. Watch the finger AND the bow!' : 'Hear how it goes first.'}
@@ -309,8 +378,10 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
                 'All done!'
               )}
             </div>
-            <FingerboardMap fing={arNote?.fing ?? null} next={next?.fing ?? null} />
-            <BowMap stroke={arNote?.bow ?? null} live={null} />
+            <div className="now-maps">
+              <FingerboardMap fing={arNote?.fing ?? null} next={next?.fing ?? null} />
+              <BowMap stroke={arNote?.bow ?? null} live={null} />
+            </div>
           </div>
         </div>
       </div>

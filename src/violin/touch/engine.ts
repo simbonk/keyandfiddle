@@ -351,3 +351,24 @@ export function previewVoice() {
   // let the worklet load the first time
   loadViolin().then(() => setTimeout(step, 30));
 }
+
+/**
+ * Bow one note in the chosen violin sound (used by "Listen" in Songs).
+ * string: 0 = G .. 3 = E.
+ */
+export function playBowedNote(string: number, midi: number, seconds: number, down = true) {
+  unlockAudio();
+  const freq = 440 * 2 ** ((midi - 69) / 12);
+  const dir = down ? 1 : -1;
+  const i = Math.max(0, Math.min(3, string));
+  sendStrings([{ i, freq, snap: true, bowing: true, vel: 0 }]);
+  const ms = Math.max(120, seconds * 1000);
+  const steps = [0.05, 0.1, 0.12];
+  steps.forEach((v, j) => setTimeout(() => sendStrings([{ i, vel: dir * v, bowing: true }]), 10 + j * 40));
+  // keep the bow moving for the whole note, then lift it
+  const hold = setInterval(() => sendStrings([{ i, vel: dir * 0.11, bowing: true }]), 120);
+  setTimeout(() => {
+    clearInterval(hold);
+    sendStrings([{ i, bowing: false, vel: 0 }]);
+  }, ms - 30);
+}

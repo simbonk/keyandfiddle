@@ -1104,6 +1104,21 @@ select option {
   display: block;
   max-height: 120px;
 }
+.now-maps {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.now-maps .fb-map {
+  width: auto;
+  height: 170px;
+  max-height: 170px;
+  flex: 0 0 auto;
+}
+.now-maps .bow-map {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .fb-tape {
   fill: var(--muted);
   font-size: 11px;
@@ -1262,6 +1277,10 @@ select option {
   .fb-map,
   .bow-map {
     max-height: 64px;
+  }
+  .now-maps .fb-map {
+    height: 110px;
+    max-height: 110px;
   }
 }
 @media (max-width: 700px) {
