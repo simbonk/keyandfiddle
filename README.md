@@ -28,11 +28,11 @@ Add `?arDemo` to the URL to preview the AR overlays with a synthetic player, so 
 
 ## Deploying (Vercel)
 
-Import the repo in Vercel. `vercel.json` sets the Vite build. The MediaPipe WASM runtime is copied from `node_modules` into `public/mediapipe` at build time, and the tracking models load from Google's MediaPipe model bucket.
+Import the repo in Vercel. `vercel.json` sets the Vite build.
 
 ## Stack
 
-Vite, React and TypeScript. The Web Audio API handles pitch detection (McLeod pitch method) and a small synth. Canvas 2D draws the highways and AR overlays. `@mediapipe/tasks-vision` provides hand and pose landmarks.
+Vite, React and TypeScript. The Web Audio API handles pitch detection (McLeod pitch method) and a small synth. Canvas 2D draws the highways and the touch violin, and an AudioWorklet runs the bowed-string violin model.
 
 ## Keyboard sounds
 
