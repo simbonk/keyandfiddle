@@ -57,6 +57,37 @@ describe('touch violin input', () => {
     expect(v.sounding()?.string).toBe(1);
     expect(v.sounding()?.dir).toBe('up');
   });
+  const bowIn = (v: TouchViolinState, lane: number) => {
+    const L = v.L;
+    v.down(2, L.laneX(lane, 400), 400, 0);
+    let t = 0;
+    for (let i = 0; i < 15; i++) {
+      v.move(2, L.laneX(lane, 400 - i * 5), 400 - i * 5, (t += 16));
+      v.frame(t, 0.016);
+    }
+    return v.sounding();
+  };
+  it('a finger caught between two strings plays the one the bow is clearly in', () => {
+    const v = mk();
+    const L = v.L;
+    const x = L.semisX(2);
+    // 40% of the way from the D string toward the A string: nearest is D
+    const y = L.stringY(1, x) + 0.4 * (L.stringY(2, x) - L.stringY(1, x));
+    v.down(1, x, y, 0);
+    const s = bowIn(v, 2);
+    expect(s?.string).toBe(2);
+    expect(s?.midi).toBe(69 + 2);
+    const v2 = mk();
+    v2.down(1, x, y, 0);
+    expect(bowIn(v2, 1)?.string).toBe(1);
+  });
+  it('a finger right on its string ignores the bow lane', () => {
+    const v = mk();
+    const L = v.L;
+    const x = L.semisX(2);
+    v.down(1, x, L.stringY(1, x) + 1, 0);
+    expect(bowIn(v, 2)?.string).toBe(1);
+  });
   it('the finger nearest the bridge wins', () => {
     const v = mk();
     const L = v.L;

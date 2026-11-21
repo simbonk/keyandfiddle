@@ -209,6 +209,8 @@ export interface ViolinOptions {
 
 interface Finger {
   s: number;
+  /** the neighbouring string when the finger sits well between two strings (the bow decides) */
+  alt: number | null;
   semis: number;
   x: number;
   y: number;
@@ -279,7 +281,7 @@ export class TouchViolinState {
     if (f) {
       const nf = this.finger(x, y, f.t);
       // keep "most recent" only when the finger lands on a new string
-      if (nf.s !== f.s) nf.t = t;
+      if (nf.s !== f.s && nf.alt !== f.s) nf.t = t;
       this.fingers.set(id, nf);
       return;
     }
@@ -324,13 +326,41 @@ export class TouchViolinState {
     const s = L.neckString(x, y);
     let semis = Math.min(MAX_SEMIS, L.xToSemis(x));
     if (semis < 0.5) semis = 0; // on the scroll / at the nut: no note stopped
-    return { s, semis, x, y, t };
+    // well off the string toward a neighbour: either string could be meant
+    const xx = Math.max(L.nutX, Math.min(L.fbEnd, x));
+    const off = y - L.stringY(s, xx);
+    const sp = L.spacing(xx);
+    let alt: number | null = null;
+    if (Math.abs(off) > 0.22 * sp) {
+      // string numbers grow away from the edge the G string hugs
+      const toward = Math.sign(off) === (L.top ? 1 : -1) ? s + 1 : s - 1;
+      if (toward >= 0 && toward < 4) alt = toward;
+    }
+    return { s, alt, semis, x, y, t };
+  }
+
+  /** The bow lane the bow is in, and whether it's clearly inside it (not near an edge). */
+  bowLane(): { s: number; clear: boolean } | null {
+    const b = this.bow;
+    if (!b) return null;
+    const L = this.L;
+    const s = L.padString(b.x, b.y);
+    const yy = L.top ? Math.max(L.laneY0, b.y) : Math.min(L.laneY0, b.y);
+    const half = Math.abs(L.laneX(s + 0.5, yy) - L.laneX(s - 0.5, yy)) / 2 || 1;
+    return { s, clear: Math.abs(b.x - L.laneX(s, yy)) < 0.6 * half };
+  }
+
+  /** The string a finger is on: between two strings, a bow clearly in one of their lanes picks it. */
+  fingerString(f: Finger): number {
+    if (f.alt === null) return f.s;
+    const lane = this.bowLane();
+    return lane && lane.clear && lane.s === f.alt ? f.alt : f.s;
   }
 
   /** Semitones stopped on string s (the finger nearest the bridge wins, like a real violin). */
   stopped(s: number): number {
     let best = 0;
-    for (const f of this.fingers.values()) if (f.s === s && f.semis > best) best = f.semis;
+    for (const f of this.fingers.values()) if (this.fingerString(f) === s && f.semis > best) best = f.semis;
     if (!best) return 0;
     return this.opts.snap ? Math.round(best) : best;
   }
@@ -343,7 +373,7 @@ export class TouchViolinState {
       // a finger on a string, or a touch on the scroll to pick an open string
       for (const f of this.fingers.values())
         if ((f.semis > 0 || f.x < this.L.nutX) && (!last || f.t > last.t)) last = f;
-      if (last) return last.s;
+      if (last) return this.fingerString(last);
     }
     return this.L.padString(this.bow.x, this.bow.y);
   }
@@ -981,18 +1011,19 @@ function drawViolinSurface(
   for (const f of st.fingers.values()) {
     const semis = st.opts.snap ? Math.round(f.semis) : f.semis;
     const x = semis > 0 ? L.semisX(semis) : f.x;
-    const y = L.stringY(f.s, Math.max(L.nutX, x));
+    const fs = st.fingerString(f);
+    const y = L.stringY(fs, Math.max(L.nutX, x));
     const r = Math.max(11, L.spacing(x) * 0.65);
     ctx.fillStyle = semis > 0 ? '#ffe1c4' : 'rgba(255,225,196,0.35)';
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = STRINGS[f.s].color;
+    ctx.strokeStyle = STRINGS[fs].color;
     ctx.stroke();
     if (semis > 0) {
       // name beyond the neck, where the fingertip doesn't hide it
-      const name = midiName(STRINGS[f.s].midi + Math.round(semis)).replace(/\d/, '');
+      const name = midiName(STRINGS[fs].midi + Math.round(semis)).replace(/\d/, '');
       ctx.font = `800 24px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#fff';
