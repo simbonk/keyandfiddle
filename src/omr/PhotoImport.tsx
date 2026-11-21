@@ -9,7 +9,7 @@ import {
   recognize,
   toTimeline,
 } from "./omr";
-import { saveScore, type StoredScore } from "../ui/importedSongs";
+import { isPicture, saveScore, type StoredScore } from "../ui/importedSongs";
 
 const KEYS = [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 const keyLabel = (k: number) =>
@@ -64,21 +64,68 @@ async function loadGray(
   return { w, h, data, url };
 }
 
+export const MAX_PAGES = 5;
+
+/** Read one picture, trying again at a bigger size when the print is small. */
+async function readPage(file: File): Promise<{ img: string; res: OmrResult }> {
+  const g = await loadGray(file);
+  await new Promise((r) => setTimeout(r, 30)); // let "reading" paint first
+  let r: OmrResult;
+  try {
+    r = recognize(g);
+  } catch (e) {
+    URL.revokeObjectURL(g.url);
+    throw e;
+  }
+  // small print (two pages side by side, a far-off photo): read again bigger
+  if (r.space < 10 && g.w < 3200) {
+    const big = await loadGray(file, Math.min(3200, Math.round((g.w * 13) / r.space)));
+    URL.revokeObjectURL(big.url);
+    try {
+      const r2 = recognize(big);
+      if (r2.notes.length >= r.notes.length * 0.8) r = r2;
+    } catch {
+      /* keep the first reading */
+    }
+  }
+  return { img: g.url, res: r };
+}
+
+interface Page {
+  key: number;
+  file: File;
+  img: string | null;
+  res: OmrResult | null;
+  err: string | null;
+  /** notes switched off with a tap: kept on screen (dimmed) so a second tap brings them back */
+  off: Set<number>;
+}
+const NO_OFF = new Set<number>();
+let pageKey = 0;
+const newPage = (file: File): Page => ({ key: ++pageKey, file, img: null, res: null, err: null, off: new Set() });
+
 export function PhotoImport({
-  file,
+  files,
   onDone,
   onCancel,
 }: {
-  file: File;
+  files: File[];
   onDone: (s: StoredScore) => void;
   onCancel: () => void;
 }) {
-  const [img, setImg] = useState<string | null>(null);
-  const [res, setRes] = useState<OmrResult | null>(null);
+  const [pages, setPages] = useState<Page[]>(() => files.slice(0, MAX_PAGES).map(newPage));
+  const [pi, setPi] = useState(0);
+  const page = pages[pi] as Page | undefined;
+  const img = page?.img ?? null;
+  const res = page?.res ?? null;
+  const off = page?.off ?? NO_OFF;
+  const setPage = (i: number, fn: (p: Page) => Page) => setPages((ps) => ps.map((p, k) => (k === i ? fn(p) : p)));
+  const setRes = (r: OmrResult) => setPage(pi, (p) => ({ ...p, res: r }));
+  const setOff = (v: Set<number> | ((o: Set<number>) => Set<number>)) =>
+    setPage(pi, (p) => ({ ...p, off: typeof v === "function" ? v(p.off) : v }));
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<number | null>(null);
-  // notes switched off with a tap: kept on screen (dimmed) so a second tap brings them back
-  const [off, setOff] = useState<Set<number>>(() => new Set());
+  const addRef = useRef<HTMLInputElement>(null);
   const press = useRef<{ id: number; timer: number; long: boolean } | null>(
     null,
   );
@@ -88,68 +135,89 @@ export function PhotoImport({
   const timers = useRef<number[]>([]);
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // read the pages one at a time, in order
+  const reading = useRef<number | null>(null);
   useEffect(() => {
-    let url = "";
-    let dead = false;
-    (async () => {
-      try {
-        const g = await loadGray(file);
-        url = g.url;
-        if (dead) return;
-        setImg(g.url);
-        await new Promise((r) => setTimeout(r, 30)); // let "reading" paint first
-        let r = recognize(g);
-        // small print (two pages side by side, a far-off photo): read again bigger
-        if (r.space < 10 && g.w < 3200) {
-          const big = await loadGray(
-            file,
-            Math.min(3200, Math.round((g.w * 13) / r.space)),
-          );
-          URL.revokeObjectURL(big.url);
-          try {
-            const r2 = recognize(big);
-            if (r2.notes.length >= r.notes.length * 0.8) r = r2;
-          } catch {
-            /* keep the first reading */
-          }
-        }
-        if (!dead) setRes(r);
-      } catch (e) {
-        if (!dead) setErr((e as Error).message);
-      }
-    })();
-    return () => {
-      dead = true;
-      if (url) URL.revokeObjectURL(url);
+    const next = pages.find((p) => !p.res && !p.err);
+    if (!next || reading.current !== null) return;
+    reading.current = next.key;
+    readPage(next.file)
+      .then(({ img, res }) => setPages((ps) => ps.map((p) => (p.key === next.key ? { ...p, img, res } : p))))
+      .catch((e) => setPages((ps) => ps.map((p) => (p.key === next.key ? { ...p, err: (e as Error).message } : p))))
+      .finally(() => {
+        reading.current = null;
+        setPages((ps) => [...ps]); // look for the next page
+      });
+  }, [pages]);
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+  useEffect(
+    () => () => {
+      pagesRef.current.forEach((p) => p.img && URL.revokeObjectURL(p.img));
       timers.current.forEach(clearTimeout);
-    };
-  }, [file]);
+    },
+    [],
+  );
+  const addPages = (fs: File[]) => {
+    const room = MAX_PAGES - pages.length;
+    const add = fs.filter(isPicture).slice(0, room).map(newPage);
+    if (!add.length) return;
+    setPages((ps) => [...ps, ...add]);
+    setPi(pages.length);
+    setSel(null);
+  };
+  const movePage = (d: -1 | 1) => {
+    const j = pi + d;
+    if (j < 0 || j >= pages.length) return;
+    setPages((ps) => {
+      const n = [...ps];
+      [n[pi], n[j]] = [n[j], n[pi]];
+      return n;
+    });
+    setPi(j);
+  };
+  const removePage = () => {
+    if (pages.length < 2) return;
+    const p = pages[pi];
+    if (p.img) URL.revokeObjectURL(p.img);
+    setPages((ps) => ps.filter((_, k) => k !== pi));
+    setPi(Math.max(0, pi - 1));
+    setSel(null);
+    setUndo([]);
+    setRedo([]);
+  };
 
   // undo / redo: every change saves what was there before
-  type Snap = { res: OmrResult; off: Set<number> };
+  type Snap = { key: number; res: OmrResult; off: Set<number> };
   const [undoStack, setUndo] = useState<Snap[]>([]);
   const [redoStack, setRedo] = useState<Snap[]>([]);
   const snap = () => {
     if (!res) return;
-    setUndo((u) => [...u.slice(-99), { res, off }]);
+    setUndo((u) => [...u.slice(-99), { key: page!.key, res, off }]);
     setRedo([]);
   };
   const undo = () => {
     const last = undoStack[undoStack.length - 1];
-    if (!last || !res) return;
-    setRedo((r) => [...r, { res, off }]);
+    if (!last) return;
+    const i = pages.findIndex((p) => p.key === last.key);
+    if (i < 0) return;
+    const cur = pages[i];
+    setRedo((r) => [...r, { key: cur.key, res: cur.res!, off: cur.off }]);
     setUndo((u) => u.slice(0, -1));
-    setRes(last.res);
-    setOff(last.off);
+    setPage(i, (p) => ({ ...p, res: last.res, off: last.off }));
+    setPi(i);
     setSel(null);
   };
   const redo = () => {
     const next = redoStack[redoStack.length - 1];
-    if (!next || !res) return;
-    setUndo((u) => [...u, { res, off }]);
+    if (!next) return;
+    const i = pages.findIndex((p) => p.key === next.key);
+    if (i < 0) return;
+    const cur = pages[i];
+    setUndo((u) => [...u, { key: cur.key, res: cur.res!, off: cur.off }]);
     setRedo((r) => r.slice(0, -1));
-    setRes(next.res);
-    setOff(next.off);
+    setPage(i, (p) => ({ ...p, res: next.res, off: next.off }));
+    setPi(i);
     setSel(null);
   };
 
@@ -432,8 +500,17 @@ export function PhotoImport({
   onSheetCancelRef.current = onSheetCancel;
 
   const save = () => {
-    if (!res) return;
-    const raw: RawNote[] = timeline.map((n) => ({
+    if (!pages.some((p) => p.res)) return;
+    // pages play one after another
+    const all: typeof timeline = [];
+    let at = 0;
+    for (const p of pages) {
+      if (!p.res) continue;
+      const tl = toTimeline({ ...p.res, notes: p.res.notes.filter((n) => !p.off.has(n.id)) });
+      for (const n of tl) all.push({ ...n, beat: n.beat + at });
+      at += Math.max(0, ...tl.map((n) => n.beat + n.beats));
+    }
+    const raw: RawNote[] = all.map((n) => ({
       midi: n.midi,
       beat: n.beat,
       beats: n.beats,
@@ -449,11 +526,11 @@ export function PhotoImport({
     }
   };
 
-  if (err)
+  if (err || (pages.length === 1 && page?.err))
     return (
       <div className="panel">
         <h2>📷 Reading your sheet music</h2>
-        <div className="toast warn">{err}</div>
+        <div className="toast warn">{err ?? page?.err}</div>
         <p className="muted small">
           Works best with a clear, straight screenshot of printed music (not
           handwriting).
@@ -475,7 +552,51 @@ export function PhotoImport({
         </button>
         <h2 style={{ margin: 0 }}>📷 Check the notes I found</h2>
       </div>
-      {!res && <p>⏳ Reading the music…</p>}
+      <div className="row wrap pi-pages">
+        {pages.map((p, i) => (
+          <button
+            key={p.key}
+            className={`btn small ${i === pi ? "primary" : "ghost"}`}
+            onClick={() => {
+              setPi(i);
+              setSel(null);
+            }}
+          >
+            {p.err ? "⚠️" : p.res ? "📄" : "⏳"} Page {i + 1}
+          </button>
+        ))}
+        {pages.length > 1 && (
+          <>
+            <button className="btn small" disabled={pi === 0} onClick={() => movePage(-1)} aria-label="Move page earlier">
+              ◀ Move
+            </button>
+            <button className="btn small" disabled={pi === pages.length - 1} onClick={() => movePage(1)} aria-label="Move page later">
+              Move ▶
+            </button>
+            <button className="btn small" onClick={removePage}>
+              ✕ Remove page
+            </button>
+          </>
+        )}
+        {pages.length < MAX_PAGES && (
+          <button className="btn small" onClick={() => addRef.current?.click()}>
+            ➕ Add a page
+          </button>
+        )}
+        <input
+          ref={addRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            addPages([...(e.target.files ?? [])]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {page?.err && <div className="toast warn">Page {pi + 1}: {page.err}</div>}
+      {!res && !page?.err && <p>⏳ Reading page {pi + 1}…</p>}
       {res && (
         <>
           <p className="muted small">
@@ -713,14 +834,16 @@ export function PhotoImport({
         <div className="row">
           <button
             className="btn big primary"
-            disabled={!res.notes.length}
+            disabled={!res.notes.length || pages.some((p) => !p.res && !p.err)}
             onClick={save}
           >
-            ✅ Save song
+            ✅ Save song{pages.length > 1 ? ` (${pages.length} pages)` : ""}
           </button>
           <span className="muted small">
+            {pages.length > 1 ? `This page: ` : ""}
             {timeline.length} notes
             {off.size ? `, ${off.size} switched off` : ""}
+            {pages.some((p) => !p.res && !p.err) ? " · still reading the other pages…" : ""}
           </span>
         </div>
       )}

@@ -35,13 +35,15 @@ export function SongPicker({
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
-  const [photo, setPhoto] = useState<File | null>(null);
+  const [photo, setPhoto] = useState<File[] | null>(null);
   const [showImport, setShowImport] = useState(false);
-  const onFile = async (f: File | undefined) => {
+  const onFile = async (all: File[]) => {
+    const f = all[0];
     if (!f) return;
-    if (isPicture(f)) {
+    const pics = all.filter(isPicture);
+    if (pics.length) {
       setMsg(null);
-      setPhoto(f);
+      setPhoto(pics.slice(0, 5));
       if (fileRef.current) fileRef.current.value = '';
       return;
     }
@@ -80,7 +82,7 @@ export function SongPicker({
   if (photo)
     return (
       <PhotoImport
-        file={photo}
+        files={photo}
         onCancel={() => setPhoto(null)}
         onDone={(sc) => {
           setPhoto(null);
@@ -129,7 +131,7 @@ export function SongPicker({
               <span className="muted small">From a photo, screenshot or music file</span>
             </button>
           </div>
-          <input ref={fileRef} type="file" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+          <input ref={fileRef} type="file" multiple hidden onChange={(e) => onFile([...(e.target.files ?? [])])} />
           {msg && <div className={`toast ${msg.bad ? 'warn' : 'good'}`}>{msg.text}</div>}
           {showImport && (
             <div className="modal-scrim" onClick={() => setShowImport(false)}>
@@ -141,7 +143,7 @@ export function SongPicker({
               >
                 <h2>📄 Import sheet music</h2>
                 <p>
-                  Take a photo or screenshot of printed music, or pick a MusicXML or MIDI file from a sheet music app.
+                  Take a photo or screenshot of printed music (pick up to 5 pages at once), or pick a MusicXML or MIDI file from a sheet music app.
                 </p>
                 <p className="muted small">
                   For photos I read the notes and show you what I found, so you can fix anything before saving. Clear,

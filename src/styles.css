@@ -1393,6 +1393,11 @@ select option {
   overflow: hidden;
   min-width: 100%;
 }
+.pi-pages {
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
 .pi-tools {
   align-items: center;
   gap: 8px;
