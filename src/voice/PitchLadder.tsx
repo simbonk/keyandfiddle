@@ -27,18 +27,25 @@ export function PitchLadder({
   fold?: boolean;
   height?: string;
 }) {
-  const trail = useRef<{ t: number; m: number | null }[]>([]);
+  const trail = useRef<{ t: number; m: number | null; real: number | null }[]>([]);
+  const raw = useRef<number[]>([]);
   usePitchListener((f) => {
-    let m: number | null = f.freq && f.rms > 0.004 ? f.midi : null;
+    let m: number | null = null;
+    if (f.freq && f.rms > 0.004) {
+      raw.current.push(f.midi);
+      if (raw.current.length > 3) raw.current.shift();
+      m = [...raw.current].sort((a, b) => a - b)[raw.current.length >> 1];
+    } else raw.current = [];
+    const real = m;
     if (m !== null && fold && target) m = foldToTarget(m, target.midi);
-    trail.current.push({ t: f.t, m });
+    trail.current.push({ t: f.t, m, real });
     while (trail.current.length && trail.current[0].t < f.t - 5000) trail.current.shift();
   });
 
   const canvasRef = useAnimationCanvas((ctx, w, h, now) => {
     ctx.clearRect(0, 0, w, h);
-    const top = hi + 2;
-    const bot = lo - 2;
+    const top = hi + 3;
+    const bot = lo - 3;
     const y = (m: number) => ((top - m) / (top - bot)) * h;
     const labelW = 46;
     // note lines
@@ -70,10 +77,10 @@ export function PitchLadder({
     // the singing line (newest at the right edge)
     const span = 4000;
     const x = (t: number) => w - 30 - ((now - t) / span) * (w - labelW - 40);
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 7;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    let prev: { t: number; m: number | null } | null = null;
+    let prev: { t: number; m: number | null; real: number | null } | null = null;
     for (const p of trail.current) {
       if (p.m !== null && prev && prev.m !== null && p.t - prev.t < 120 && Math.abs(p.m - prev.m) < 1.5) {
         const good = target && Math.abs((p.m - target.midi) * 100) <= target.tol;
@@ -85,18 +92,43 @@ export function PitchLadder({
       }
       prev = p;
     }
-    // current voice dot
+    // current voice: big ball with a "You: C4" bubble, and a full-width line at your height
     const last = trail.current[trail.current.length - 1];
-    if (last && last.m !== null && now - last.t < 200) {
+    if (last && last.m !== null && now - last.t < 250) {
       const good = target && Math.abs((last.m - target.midi) * 100) <= target.tol;
-      ctx.fillStyle = good ? '#52d273' : '#ff9f1c';
+      const col = good ? '#52d273' : '#ff9f1c';
+      const by = y(Math.max(bot + 0.6, Math.min(top - 0.6, last.m)));
+      const bx = x(last.t);
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(labelW, by - 1, w - labelW, 2);
+      ctx.globalAlpha = 0.3;
       ctx.beginPath();
-      ctx.arc(x(last.t), y(last.m), 11, 0, Math.PI * 2);
+      ctx.arc(bx, by, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(bx, by, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      const label = `You: ${midiName(Math.round(last.real ?? last.m))}`;
+      ctx.font = '800 16px "Baloo 2", system-ui, sans-serif';
+      const tw = ctx.measureText(label).width + 16;
+      const lx = bx - tw - 26;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.beginPath();
+      ctx.roundRect(lx, by - 14, tw, 28, 10);
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(x(last.t), y(last.m), 4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.textAlign = 'left';
+      ctx.fillText(label, lx + 8, by + 1);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '800 15px "Baloo 2", system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('🎤 sing and your dot appears here', w - 14, h - 16);
     }
   });
 

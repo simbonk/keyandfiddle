@@ -52,12 +52,13 @@ function Sing({ song, range, onExit }: { song: VoiceSong; range: VoiceRange; onE
   const baseShift = useMemo(() => fitShift(song.notes, range), [song, range]);
   const shift = baseShift + shiftAdj;
 
-  const st = useRef({ beat: -2, notes: [] as Note[], trail: [] as { beat: number; m: number | null }[], last: 0, done: false, played: -1 });
+  const st = useRef({ beat: -2, notes: [] as Note[], trail: [] as { t: number; m: number | null; real: number | null; good: boolean }[], raw: [] as number[], last: 0, done: false, played: -1 });
   const build = () => {
     st.current = {
       beat: -2,
       notes: song.notes.map((n) => ({ midi: n.midi! + shift, beat: n.beat, beats: n.beats, lyric: n.lyric, onMs: 0, state: 'pending' })),
       trail: [],
+      raw: [],
       last: 0,
       done: false,
       played: -1,
@@ -80,14 +81,23 @@ function Sing({ song, range, onExit }: { song: VoiceSong; range: VoiceRange; onE
     const s = st.current;
     const dt = s.last ? Math.min(60, f.t - s.last) : 0;
     s.last = f.t;
-    if (!running || mode === 'listen') return;
-    const m = f.freq && f.rms > 0.004 ? f.midi : null;
+    if (mode === 'listen') return;
+    // smooth out wobble: median of the last 3 readings
+    let m: number | null = null;
+    if (f.freq && f.rms > 0.004) {
+      s.raw.push(f.midi);
+      if (s.raw.length > 3) s.raw.shift();
+      m = [...s.raw].sort((a, b) => a - b)[s.raw.length >> 1];
+    } else s.raw = [];
     // the note under the playhead (or the one we're waiting on)
     const n = s.notes.find((x) => x.state === 'pending' && x.beat <= s.beat + 0.05) ?? null;
-    const sung = m !== null && n ? foldToTarget(m, n.midi) : m;
-    s.trail.push({ beat: s.beat, m: sung });
-    if (s.trail.length > 3000) s.trail.shift();
-    if (n && sung !== null && Math.abs(sung - n.midi) * 100 <= tol) {
+    const ref = n ?? current();
+    const sung = m !== null && ref ? foldToTarget(m, ref.midi) : m;
+    const good = !!n && sung !== null && Math.abs(sung - n.midi) * 100 <= tol;
+    s.trail.push({ t: f.t, m: sung, real: m, good });
+    while (s.trail.length && s.trail[0].t < f.t - 8000) s.trail.shift();
+    if (!running) return;
+    if (n && good) {
       n.onMs += dt;
       const need = Math.min(350, n.beats * (60000 / (song.bpm * speed)) * 0.4);
       if (n.onMs >= need) n.state = 'hit';
@@ -164,32 +174,93 @@ function Sing({ song, range, onExit }: { song: VoiceSong; range: VoiceRange; onE
       ctx.fillText(n.lyric, x0, h - lyricH / 2);
       ctx.font = '700 11px "Baloo 2", system-ui, sans-serif';
     }
-    // your voice
-    ctx.lineWidth = 4;
+    // note names down the left side
+    ctx.fillStyle = 'rgba(10,6,30,0.75)';
+    ctx.fillRect(0, 0, 40, h - lyricH);
+    ctx.font = '800 12px "Baloo 2", system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    for (let m = Math.ceil(lo); m <= hi; m++) {
+      if ([1, 3, 6, 8, 10].includes(m % 12)) continue;
+      ctx.fillStyle = m % 12 === 0 ? '#ffcf33' : 'rgba(255,255,255,0.6)';
+      ctx.fillText(midiName(m), 5, y(m));
+    }
+    // your voice: a thick line that scrolls left from the playhead in real time
+    const pxMs = pxBeat / beatMs;
+    const vx = (t: number) => px - (now - t) * pxMs;
+    const cy = (m: number) => y(Math.max(lo - 1, Math.min(hi + 1, m)));
     ctx.lineCap = 'round';
-    let prev: { beat: number; m: number | null } | null = null;
-    for (const p of s.trail) {
-      if (prev && p.m !== null && prev.m !== null && Math.abs(p.m - prev.m) < 1.5 && p.beat - prev.beat < 0.3) {
-        const xa = x(prev.beat);
-        if (xa > -10) {
-          ctx.strokeStyle = '#fff';
-          ctx.beginPath();
-          ctx.moveTo(xa, y(Math.max(lo, Math.min(hi, prev.m))));
-          ctx.lineTo(x(p.beat), y(Math.max(lo, Math.min(hi, p.m))));
-          ctx.stroke();
+    ctx.lineJoin = 'round';
+    for (const pass of [0, 1]) {
+      let prev: (typeof s.trail)[number] | null = null;
+      for (const p of s.trail) {
+        if (prev && p.m !== null && prev.m !== null && Math.abs(p.m - prev.m) < 1.5 && p.t - prev.t < 150) {
+          const xa = vx(prev.t);
+          if (xa > 40) {
+            ctx.strokeStyle = pass === 0 ? 'rgba(255,255,255,0.25)' : p.good ? '#52d273' : '#ff9f1c';
+            ctx.lineWidth = pass === 0 ? 14 : 6;
+            ctx.beginPath();
+            ctx.moveTo(xa, cy(prev.m));
+            ctx.lineTo(vx(p.t), cy(p.m));
+            ctx.stroke();
+          }
         }
+        prev = p;
       }
-      prev = p;
     }
     // playhead
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.fillRect(px - 1, 0, 2, h - lyricH);
+    // the big "you are here" ball with your note name
     const last = s.trail[s.trail.length - 1];
-    if (last && last.m !== null && now) {
-      ctx.fillStyle = '#fff';
+    const live = last && last.m !== null && now - last.t < 250;
+    const target = current();
+    if (live) {
+      const by = cy(last.m!);
+      const col = last.good ? '#52d273' : '#ff9f1c';
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.3;
       ctx.beginPath();
-      ctx.arc(px, y(Math.max(lo, Math.min(hi, last.m))), 9, 0, Math.PI * 2);
+      ctx.arc(px, by, 24, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(px, by, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      // label bubble
+      const label = `You: ${midiName(Math.round(last.real ?? last.m!))}`;
+      ctx.font = '800 16px "Baloo 2", system-ui, sans-serif';
+      const tw = ctx.measureText(label).width + 16;
+      const lx = px + 22;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      roundRect(ctx, lx, by - 14, tw, 28, 10);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, lx + 8, by + 1);
+      // which way to go
+      if (target && !last.good && Math.abs(last.m! - target.midi) > tol / 100) {
+        const up = last.m! < target.midi;
+        ctx.fillStyle = '#ff9f1c';
+        ctx.font = '900 22px "Baloo 2", system-ui, sans-serif';
+        ctx.fillText(up ? '⬆ higher' : '⬇ lower', lx, up ? by - 30 : by + 32);
+      }
+    } else {
+      // not hearing you: a dashed circle by the next note
+      const gy = target ? cy(target.midi) : h / 2;
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(px, gy, 14, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = '800 14px "Baloo 2", system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('🎤 sing!', px + 22, gy + 1);
     }
   });
 

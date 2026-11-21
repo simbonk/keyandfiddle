@@ -44,7 +44,10 @@ export function hasSavedRange() {
  * in a different octave (a dad singing a kid's song) still counts.
  */
 export function foldToTarget(sung: number, target: number): number {
-  return sung + 12 * Math.round((target - sung) / 12);
+  const k = Math.round((sung - target) / 12);
+  // only an octave slip (within 2 semitones of the target's octave) is folded;
+  // otherwise keep the real pitch so "higher / lower" stays honest
+  return k !== 0 && Math.abs(sung - 12 * k - target) <= 2 ? sung - 12 * k : sung;
 }
 
 /** Semitones to move a melody so it sits in the middle of the singer's range. */
