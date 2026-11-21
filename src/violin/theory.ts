@@ -1,4 +1,4 @@
-import { CANON_VARS, GS_A, GS_B, MINUET_A, MINUET_B, ODE } from '../piano/songs';
+import { CAMPTOWN, CANON_VARS, GS_A, GS_B, MINUET_A, MINUET_B, ODE, SHENANDOAH, SUSANNA, YANKEE } from '../piano/songs';
 // Violin facts: strings, first-position fingering, bowing plan.
 import { parseSong, type Song, type SongNote } from '../audio/notes';
 
@@ -244,6 +244,42 @@ export const VIOLIN_SONGS: Song[] = [
     level: 3,
     blurb: 'Both parts. Minor key: low 1 for F on the E string, high 3 for G#.',
     notes: melodyOf(GS_A + ' ' + GS_B),
+  },
+  {
+    id: 'shenandoah-v',
+    title: 'Shenandoah',
+    emoji: '🌊',
+    bpm: 60,
+    level: 2,
+    blurb: 'Slow, long bows. Starts on the G string, then D and A.',
+    notes: melodyOf(SHENANDOAH),
+  },
+  {
+    id: 'susanna-v',
+    title: 'Oh! Susanna',
+    emoji: '🪕',
+    bpm: 100,
+    level: 2,
+    blurb: 'Fiddle favourite on the D and A strings, with the chorus.',
+    notes: melodyOf(SUSANNA),
+  },
+  {
+    id: 'yankee-v',
+    title: 'Yankee Doodle',
+    emoji: '🎩',
+    bpm: 104,
+    level: 2,
+    blurb: 'Verse on the D and A strings, chorus up on the E string.',
+    notes: melodyOf(YANKEE),
+  },
+  {
+    id: 'camptown-v',
+    title: 'Camptown Races',
+    emoji: '🐎',
+    bpm: 100,
+    level: 2,
+    blurb: 'Doo-dah! Bouncy bows on the D and A strings.',
+    notes: melodyOf(CAMPTOWN),
   },
 ];
 

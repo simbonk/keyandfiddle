@@ -222,6 +222,35 @@ function minuet(): SongNote[] {
   return [...parseSong(MINUET_A), ...b];
 }
 
+
+// ---------------------------------------------------------------------------
+// American folk songs (all 1800s, public domain), in violin-friendly keys.
+
+export const SHENANDOAH = `A3:1 |
+  D4:1 D4:1 D4:1.5 E4:0.5 | F#4:0.5 G4:0.5 B4:1 A4:2 | D5:1.5 C#5:0.5 B4:2 | A4:1 B4:0.5 A4:0.5 F#4:1 A4:1 |
+  A4:3 A4:1 | B4:1 B4:1 B4:1.5 F#4:0.5 | A4:1 F#4:1 E4:1 D4:1 | E4:1.5 F#4:0.5 D4:2 |
+  F#4:1 B4:1 A4:2 | D4:1 E4:1 F#4:1.5 D4:0.5 | E4:1 D4:3`;
+export const SHENANDOAH_C = `D | G D | G | D | D | G | D | A D | G D | D G | A D`;
+
+export const SUSANNA = `D4:0.5 E4:0.5 |
+  F#4:1 A4:1 A4:1.5 B4:0.5 | A4:1 F#4:1 D4:1.5 E4:0.5 | F#4:1 F#4:1 E4:1 D4:1 | E4:3 D4:0.5 E4:0.5 |
+  F#4:1 A4:1 A4:1.5 B4:0.5 | A4:1 F#4:1 D4:1.5 E4:0.5 | F#4:1 F#4:1 E4:1 E4:1 | D4:4 |
+  G4:2 B4:2 | B4:1.5 A4:0.5 A4:1 F#4:1 | D4:1 E4:2 D4:0.5 E4:0.5 |
+  F#4:1 A4:1 A4:1.5 B4:0.5 | A4:1 F#4:1 D4:1.5 E4:0.5 | F#4:1 F#4:1 E4:1 E4:1 | D4:4`;
+export const SUSANNA_C = `D | D | D | A | D | D | A | D | G | D | A | D | D | A | D`;
+
+export const YANKEE = `G4:1 G4:1 A4:1 B4:1 | G4:1 B4:1 A4:1 D4:1 | G4:1 G4:1 A4:1 B4:1 | G4:2 F#4:2 |
+  G4:1 G4:1 A4:1 B4:1 | C5:1 B4:1 A4:1 G4:1 | F#4:1 D4:1 E4:1 F#4:1 | G4:2 G4:2 |
+  E5:1 F#5:1 E5:1 D5:1 | E5:1 F#5:1 G5:2 | D5:1 E5:1 D5:1 C5:1 | B4:2 D5:2 |
+  E5:1 F#5:1 E5:1 D5:1 | E5:1 F#5:1 G5:1 E5:1 | D5:1 G5:1 F#5:1 A5:1 | G5:2 G5:2`;
+export const YANKEE_C = `G | D | G | D | G | C | D | G | C | G | C | G | C | G | D | G`;
+
+export const CAMPTOWN = `A4:1 A4:1 F#4:1 A4:1 | B4:1 A4:1 F#4:2 | F#4:2 E4:2 | F#4:2 E4:2 |
+  A4:1 A4:1 F#4:1 A4:1 | B4:1 A4:1 F#4:2 | E4:1 F#4:0.5 E4:0.5 D4:2 | D4:4 |
+  D4:1.5 D4:0.5 F#4:1 A4:1 | D5:4 | B4:1.5 B4:0.5 D5:1 B4:1 | A4:4 |
+  A4:0.5 A4:0.5 F#4:0.5 F#4:0.5 A4:0.5 A4:0.5 F#4:0.5 F#4:0.5 | E4:1 F#4:1 E4:1 D4:1 | D4:4`;
+export const CAMPTOWN_C = `D | D | A | D | D | D | A | D | D | D | G | D | D | A | D`;
+
 export const FULL_SONGS: Song[] = [
   {
     id: 'minuet-g',
@@ -287,6 +316,42 @@ export const FULL_SONGS: Song[] = [
     level: 3,
     blurb: 'Pachelbel. The left hand repeats the same 8 notes while the tune keeps changing on top.',
     notes: canon(CANON_VARS),
+  },
+  {
+    id: 'shenandoah',
+    title: 'Shenandoah',
+    emoji: '🌊',
+    bpm: 66,
+    level: 2,
+    blurb: 'Old American river song. Slow and singing.',
+    notes: arrange(SHENANDOAH, SHENANDOAH_C, 4, 'root5', 1),
+  },
+  {
+    id: 'oh-susanna',
+    title: 'Oh! Susanna',
+    emoji: '🪕',
+    bpm: 112,
+    level: 2,
+    blurb: 'Stephen Foster, 1848. Verse and chorus.',
+    notes: arrange(SUSANNA, SUSANNA_C, 4, 'root5', 1),
+  },
+  {
+    id: 'yankee-doodle',
+    title: 'Yankee Doodle',
+    emoji: '🎩',
+    bpm: 120,
+    level: 1,
+    blurb: 'Marching tune, verse and chorus.',
+    notes: arrange(YANKEE, YANKEE_C, 4, 'root5'),
+  },
+  {
+    id: 'camptown',
+    title: 'Camptown Races',
+    emoji: '🐎',
+    bpm: 112,
+    level: 2,
+    blurb: 'Stephen Foster, 1850. Doo-dah, doo-dah!',
+    notes: arrange(CAMPTOWN, CAMPTOWN_C, 4, 'root5'),
   },
 ];
 
