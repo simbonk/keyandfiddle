@@ -46,14 +46,15 @@ export function analyzeCapture(frames: CapFrame[], target: number, prevFreq: num
   const near: { freq: number; rms: number }[] = [];
   for (const f of recent) {
     const { freq, diff } = foldToTarget(f.freq, target);
-    if (Math.abs(diff) > 0.65) continue;
+    // old pianos can be far off: anything within ~1.5 semitones counts as this key
+    if (Math.abs(diff) > 1.5) continue;
     // ignore the previous key still ringing
     if (prevFreq && Math.abs(centsBetween(freq, foldToTarget(prevFreq, target).freq)) < 35) continue;
     near.push({ freq, rms: f.rms });
   }
   if (near.length >= 8) {
     const m = median(near.map((n) => n.freq));
-    const steady = near.filter((n) => Math.abs(centsBetween(n.freq, m)) < 25);
+    const steady = near.filter((n) => Math.abs(centsBetween(n.freq, m)) < 40);
     if (steady.length >= 8) {
       return { kind: 'accept', freq: median(steady.map((n) => n.freq)), peak: Math.max(...near.map((n) => n.rms)) };
     }
@@ -65,9 +66,16 @@ export function analyzeCapture(frames: CapFrame[], target: number, prevFreq: num
     const m = median(folded.map((x) => x.diff));
     const steady = folded.filter((x) => Math.abs(x.diff - m) < 0.3);
     const prevDiff = prevFreq ? foldToTarget(prevFreq, target).diff : 99;
-    if (steady.length >= 22 && Math.abs(m) >= 1 && Math.abs(m - prevDiff) > 0.4) {
+    if (steady.length >= 22 && Math.abs(m) > 1.5 && Math.abs(m - prevDiff) > 0.4) {
       return { kind: 'mismatch', freq: median(steady.map((x) => x.freq)) };
     }
   }
   return null;
+}
+
+/** Best guess at the key's pitch from recent frames, for the "use this note" button. */
+export function currentGuess(frames: CapFrame[], target: number, now: number): number | null {
+  const fs = frames.filter((f) => f.t > now - 600 && f.freq > 0).map((f) => foldToTarget(f.freq, target).freq);
+  if (fs.length < 4) return null;
+  return median(fs);
 }

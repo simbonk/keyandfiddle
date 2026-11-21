@@ -4,7 +4,7 @@ import { centsBetween, freqToMidiFloat, isBlackKey, midiName, midiToFreq } from 
 import { playNote } from '../audio/synth';
 import { LevelMeter, MicGate } from '../ui/MicButton';
 import { Keyboard } from './Keyboard';
-import { type CapFrame, analyzeCapture } from './captureKey';
+import { type CapFrame, analyzeCapture, currentGuess } from './captureKey';
 import { type PianoCalibration, keyOffsetCents, saveCalibration } from './calibration';
 
 type Mode = 'quick' | 'full';
@@ -42,7 +42,9 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
   usePitchListener((f) => {
     if (!mode || finished || result || mismatch) return;
     const buf = frames.current;
-    buf.push({ t: f.t, freq: f.freq, rms: f.rms });
+    // accept less-clean tones too: an old piano's strings for one key often beat against each other
+    const freq = f.rawFreq && f.clarity >= 0.55 && f.rms > 0.005 ? f.rawFreq : 0;
+    buf.push({ t: f.t, freq, rms: f.rms });
     while (buf.length && buf[0].t < f.t - 900) buf.shift();
     const prev = keys[idx - 1];
     const r = analyzeCapture(buf, target, prev !== undefined ? draft.keys[prev] ?? 0 : 0, stepStart.current, f.t);
@@ -151,7 +153,11 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
     );
   }
 
-  const cents = frame?.freq ? centsBetween(frame.freq, midiToFreq(target)) : null;
+  const heardFreq = frame && frame.rawFreq && frame.clarity >= 0.55 && frame.rms > 0.005 ? frame.rawFreq : 0;
+  const cents = heardFreq ? centsBetween(heardFreq, midiToFreq(target)) : null;
+  const guess = currentGuess(frames.current, target, performance.now());
+  // what was actually heard, before folding into the target's octave (for the label)
+  const rawGuess = heardFreq || null;
 
   return (
     <MicGate why="To tune in to your piano I need to hear it through the microphone.">
@@ -172,13 +178,13 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
           start={startMidi}
           end={startMidi + 24}
           highlights={{ [target]: { color: '#ffcf33', label: '👇' } }}
-          pressed={frame?.freq ? Math.round(freqToMidiFloat(frame.freq)) : null}
+          pressed={heardFreq ? Math.round(freqToMidiFloat(heardFreq)) : null}
           height={150}
         />
         <div className="listen-row">
           <LevelMeter level={frame?.rms ?? 0} />
           <span className="muted">
-            {frame?.freq ? `hearing ${midiName(Math.round(freqToMidiFloat(frame.freq)))}` : 'listening…'}
+            {heardFreq ? `hearing ${midiName(Math.round(freqToMidiFloat(heardFreq)))}` : 'listening…'}
             {cents !== null && Math.abs(cents) < 150 ? ` (${cents > 0 ? '+' : ''}${Math.round(cents)}¢)` : ''}
           </span>
         </div>
@@ -202,6 +208,14 @@ export function TuningWizard({ cal, onDone, onCancel }: Props) {
                 That was {midiName(target)}, keep it
               </button>
             </div>
+          </div>
+        )}
+        {!result && !mismatch && guess !== null && performance.now() - stepStart.current > 2500 && (
+          <div className="row wrap">
+            <button className="btn primary" onClick={() => accept(guess, Math.max(...frames.current.map((x) => x.rms), 0.02))}>
+              ✋ Use the note I hear ({midiName(Math.round(freqToMidiFloat(rawGuess ?? guess)))}) for {midiName(target)}
+            </button>
+            <span className="muted small">Stuck? This remembers whatever your piano plays for this key.</span>
           </div>
         )}
         <div className="row">

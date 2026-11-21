@@ -9,6 +9,8 @@ export interface PitchFrame {
   freq: number; // Hz (0 = none)
   midi: number; // fractional midi (NaN when no pitch)
   clarity: number;
+  /** Pitch estimate even when the tone is not very clean (beating strings, noise); 0 = none. */
+  rawFreq: number;
   rms: number;
   /** Smoothed loudness envelope (slow). */
   level: number;
@@ -157,6 +159,7 @@ export class MicEngine {
       freq: hasPitch ? r.freq : 0,
       midi: hasPitch ? freqToMidiFloat(r.freq) : NaN,
       clarity: r.clarity,
+      rawFreq: r.freq,
       rms,
       level: this.slowLevel,
       onset,

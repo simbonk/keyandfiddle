@@ -167,3 +167,17 @@ describe('tuning wizard capture', async () => {
     expect(run(() => et(67))?.kind).toBe('mismatch');
   });
 });
+
+describe('tuning wizard: very out-of-tune key', async () => {
+  const { analyzeCapture } = await import('../piano/captureKey');
+  it('accepts a key 90 cents flat with a wobbly (beating) pitch', () => {
+    const f3 = 440 * Math.pow(2, (53 - 69) / 12) * Math.pow(2, -90 / 1200);
+    const frames: { t: number; freq: number; rms: number }[] = [];
+    let got = null;
+    for (let t = 0; t <= 1500 && !got; t += 20) {
+      frames.push({ t, freq: t < 300 ? 0 : f3 * Math.pow(2, (25 * Math.sin(t / 90)) / 1200), rms: 0.04 });
+      got = analyzeCapture(frames, 53, 0, 0, t);
+    }
+    expect(got?.kind).toBe('accept');
+  });
+});
