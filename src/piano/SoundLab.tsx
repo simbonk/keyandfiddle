@@ -41,26 +41,37 @@ function preview(id: SoundId) {
 
 type RecState = 'idle' | 'listening' | 'hearing' | 'quiet' | 'denied' | 'error';
 
-/** The Keyboard tab: pick a sound, make your own from the mic, and play freely. */
+/** Pick a keyboard sound, make your own from the mic (with a keyboard to try it). */
 export function SoundLab({ keys = true }: { keys?: boolean }) {
   const sound = useKeyboardSound();
   const mine = useMySounds();
-  const [octave, setOctave] = useState(48);
-  const [down, setDown] = useState<Set<number>>(new Set());
-  const voices = useRef(new Map<number, Voice>());
   const [rec, setRec] = useState<RecState>('idle');
   const [level, setLevel] = useState(0);
   const recHandle = useRef<ReturnType<typeof recordSound> | null>(null);
-  const [confirmDel, setConfirmDel] = useState<string | null>(null);
-
+  const [undo, setUndo] = useState<{ sound: MySound; wasSelected: boolean } | null>(null);
   useEffect(() => {
-    preloadSound(sound, octave, octave + 24);
-  }, [sound, octave]);
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 6000);
+    return () => clearTimeout(t);
+  }, [undo]);
+  const remove = (m: MySound) => {
+    const wasSelected = sound === `mine:${m.id}`;
+    if (wasSelected) setSound('grand');
+    deleteMySound(m.id);
+    setUndo({ sound: m, wasSelected });
+  };
+  const restore = async () => {
+    if (!undo) return;
+    await saveMySound(undo.sound);
+    if (undo.wasSelected) setSound(`mine:${undo.sound.id}`);
+    setUndo(null);
+  };
+
   useEffect(() => () => recHandle.current?.stop(), []);
 
   const pick = (id: SoundId) => {
     setSound(id);
-    preloadSound(id, octave, octave + 24).then(() => preview(id));
+    preloadSound(id).then(() => preview(id));
   };
 
   const startRec = async () => {
@@ -135,7 +146,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
                       : rec === 'error'
                         ? 'Something went wrong with the microphone. Try again?'
                         : full
-                          ? `You have ${MAX_MY_SOUNDS} sounds. Tap ✖ on one to make room.`
+                          ? `You have ${MAX_MY_SOUNDS} sounds. Pick one and tap 🗑 Delete to make room.`
                           : 'Tap the red button, then say hello, cough, clap, sneeze or sing! It turns into a whole keyboard.'}
             </p>
           </div>
@@ -164,22 +175,6 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
                     </span>
                     <span>{m.name}</span>
                   </button>
-                  <button
-                    className={`sound-del ${confirmDel === m.id ? 'sure' : ''}`}
-                    aria-label="Delete this sound"
-                    onClick={() => {
-                      if (confirmDel !== m.id) {
-                        setConfirmDel(m.id);
-                        setTimeout(() => setConfirmDel((c) => (c === m.id ? null : c)), 3000);
-                        return;
-                      }
-                      setConfirmDel(null);
-                      if (sound === id) setSound('grand');
-                      deleteMySound(m.id);
-                    }}
-                  >
-                    {confirmDel === m.id ? 'Delete?' : '✖'}
-                  </button>
                 </div>
               );
             })}
@@ -187,44 +182,64 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
         )}
         {(() => {
           const sel = mine.find((m) => sound === `mine:${m.id}`);
-          return sel ? <SampleEditor sound={sel} /> : null;
+          return sel ? <SampleEditor sound={sel} onDelete={() => remove(sel)} /> : null;
         })()}
+        {undo && (
+          <div className="toast undo-toast">
+            🗑 Deleted {undo.sound.emoji} {undo.sound.name}
+            <button className="btn small" onClick={restore}>
+              ↩ Undo
+            </button>
+          </div>
+        )}
         {mine.length > 0 && <p className="muted small tip">Tip: tap the picture on your chosen sound to change it.</p>}
       </div>
 
-      {keys && (
-        <div className="freeplay">
-          <div className="row octave-row">
-            <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
-              ◀ Lower
-            </button>
-            <span className="muted small">Play anything!</span>
-            <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
-              Higher ▶
-            </button>
-          </div>
-          <Keyboard
-            start={octave}
-            end={octave + 24}
-            pressed={down}
-            height="min(34dvh, 240px)"
-            onPress={(m) => {
-              voices.current.get(m)?.kill();
-              voices.current.set(m, noteOn(m, 0.75));
-              setDown((s) => new Set(s).add(m));
-            }}
-            onRelease={(m) => {
-              voices.current.get(m)?.release();
-              voices.current.delete(m);
-              setDown((s) => {
-                const n = new Set(s);
-                n.delete(m);
-                return n;
-              });
-            }}
-          />
-        </div>
-      )}
+      {keys && <FreeKeys />}
+    </div>
+  );
+}
+
+/** A keyboard to play freely with the chosen sound, with octave buttons. */
+export function FreeKeys({ height = 'min(34dvh, 240px)', header }: { height?: string; header?: React.ReactNode }) {
+  const sound = useKeyboardSound();
+  const [octave, setOctave] = useState(48);
+  const [down, setDown] = useState<Set<number>>(new Set());
+  const voices = useRef(new Map<number, Voice>());
+  useEffect(() => {
+    preloadSound(sound, octave, octave + 24);
+  }, [sound, octave]);
+  return (
+    <div className="freeplay">
+      <div className="row octave-row">
+        <button className="btn small ghost" disabled={octave <= 24} onClick={() => setOctave((o) => o - 12)}>
+          ◀ Lower
+        </button>
+        {header ?? <span className="muted small">Play anything!</span>}
+        <button className="btn small ghost" disabled={octave >= 72} onClick={() => setOctave((o) => o + 12)}>
+          Higher ▶
+        </button>
+      </div>
+      <Keyboard
+        start={octave}
+        end={octave + 24}
+        pressed={down}
+        height={height}
+        onPress={(m) => {
+          voices.current.get(m)?.kill();
+          voices.current.set(m, noteOn(m, 0.75));
+          setDown((s) => new Set(s).add(m));
+        }}
+        onRelease={(m) => {
+          voices.current.get(m)?.release();
+          voices.current.delete(m);
+          setDown((s) => {
+            const n = new Set(s);
+            n.delete(m);
+            return n;
+          });
+        }}
+      />
     </div>
   );
 }

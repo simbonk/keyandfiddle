@@ -34,25 +34,24 @@ export function LevelMeter({ level }: { level: number }) {
 }
 
 /** Mic sensitivity: iPad mics are quiet, so they start boosted. */
-export function MicBoostSelect() {
+export function MicBoostSelect({ bare = false }: { bare?: boolean }) {
   const [boost, setBoost] = useState(mic.boost);
-  return (
-    <label className="mic-boost muted small">
-      🎤 Mic boost{' '}
-      <select
-        value={boost}
-        onChange={(e) => {
-          mic.setBoost(Number(e.target.value));
-          setBoost(mic.boost);
-        }}
-        aria-label="microphone boost"
-      >
-        {MIC_BOOSTS.map((b) => (
-          <option key={b} value={b}>
-            {b === 1 ? 'Off' : `${b}×`}
-          </option>
-        ))}
-      </select>
-    </label>
+  const select = (
+    <select
+      value={boost}
+      onChange={(e) => {
+        mic.setBoost(Number(e.target.value));
+        setBoost(mic.boost);
+      }}
+      aria-label="microphone boost"
+    >
+      {MIC_BOOSTS.map((b) => (
+        <option key={b} value={b}>
+          {b === 1 ? 'Off' : `${b}×`}
+        </option>
+      ))}
+    </select>
   );
+  if (bare) return select;
+  return <label className="mic-boost muted small">🎤 Mic boost {select}</label>;
 }

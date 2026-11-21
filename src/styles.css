@@ -1583,3 +1583,231 @@ select option {
     padding-top: 14px;
   }
 }
+
+/* ---------- play screen: one compact bar, no app menu ---------- */
+.app.playing .topbar {
+  display: none;
+}
+.app.playing .tab-body {
+  padding-top: 8px;
+}
+.game-bar {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.game-bar .back {
+  flex: none;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.game-bar .game-title {
+  margin-right: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.bar-feedback {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.fb-pill {
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  background: rgba(82, 210, 115, 0.95);
+  color: #062a12;
+  animation: fbin 0.18s ease-out;
+}
+.fb-pill.info {
+  background: rgba(255, 214, 10, 0.95);
+  color: #2a1a00;
+}
+.fb-pill.warn {
+  background: rgba(255, 159, 28, 0.95);
+  color: #2a1000;
+}
+@keyframes fbin {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+.mode-seg {
+  flex: none;
+}
+.mode-seg button {
+  white-space: nowrap;
+}
+.game-bar .score {
+  flex: none;
+  min-width: 0;
+}
+.opts-wrap {
+  position: relative;
+  flex: none;
+}
+.opts-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.opts-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 41;
+  min-width: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: #2b2064;
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.opt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 800;
+}
+.opt-row select {
+  max-width: 170px;
+}
+.input-seg {
+  margin-bottom: 8px;
+}
+.input-seg button {
+  font-size: 17px;
+  padding: 8px 14px;
+}
+/* phones: title and hints share one slot, mode labels shrink */
+@media (max-width: 900px) {
+  .game-bar.has-fb .game-title {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .game-bar .game-title {
+    font-size: 16px;
+  }
+  .fb-pill {
+    font-size: 14px;
+    padding: 3px 10px;
+  }
+  .mode-seg button {
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+  .game-bar .score {
+    font-size: 14px;
+  }
+}
+@media (max-width: 520px) {
+  .game-bar {
+    flex-wrap: wrap;
+  }
+  .bar-feedback {
+    order: 10;
+    flex-basis: 100%;
+    min-height: 0;
+  }
+  .game-bar.has-fb .game-title {
+    display: block;
+  }
+}
+
+/* "coming next" key: soft dotted ring, no text to clip */
+.key-next {
+  position: absolute;
+  inset: 3px;
+  border-radius: inherit;
+  border: 3px dashed rgba(255, 207, 51, 0.85);
+  box-shadow: inset 0 0 14px rgba(255, 207, 51, 0.35);
+  pointer-events: none;
+}
+.key.black .key-next {
+  border-color: rgba(255, 207, 51, 0.95);
+}
+.sample-editor-help {
+  margin-bottom: 6px;
+}
+.sample-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+.sample-editor-actions .btn {
+  white-space: nowrap;
+}
+.undo-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+.free-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+}
+.free-panel .freeplay {
+  display: flex;
+  flex-direction: column;
+}
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(10, 6, 30, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal {
+  max-width: 520px;
+  width: 100%;
+  background: #2b2064;
+}
+.settings-row {
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .game-bar {
+    flex-wrap: wrap;
+  }
+  .game-bar .game-title {
+    width: auto;
+    flex: 1 1 calc(100% - 80px);
+  }
+}
+.opt-row > span {
+  white-space: nowrap;
+}
+.opts-pop {
+  min-width: 360px;
+}
+.opts-pop .seg button {
+  white-space: nowrap;
+}
+@media (max-width: 420px) {
+  .opts-pop {
+    min-width: 0;
+    width: calc(100vw - 24px);
+  }
+}

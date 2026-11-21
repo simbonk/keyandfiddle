@@ -2,16 +2,19 @@ import { TopBarSlot } from '../ui/chrome';
 import { useState } from 'react';
 import type { Song } from '../audio/notes';
 import { type PianoCalibration, isCalibrated, loadCalibration, saveCalibration } from './calibration';
-import { PianoPlay } from './PianoPlay';
+import { InputModeChoice, PianoPlay, loadInputMode } from './PianoPlay';
 import { type Recording, Recorder, loadRecs, recordingToSong } from './Recorder';
 import { TuneChart, TuningWizard } from './TuningWizard';
 import { MicBoostSelect } from '../ui/MicButton';
+import { FreeKeys, SoundLab, SoundSelect } from './SoundLab';
 
-type View = 'play' | 'record' | 'settings';
+type View = 'play' | 'sounds' | 'free' | 'record' | 'settings';
 
 export function PianoTab() {
   const [cal, setCal] = useState<PianoCalibration>(loadCalibration);
-  const [view, setView] = useState<View>(() => (isCalibrated(loadCalibration()) ? 'play' : 'settings'));
+  const [view, setView] = useState<View>(() =>
+    isCalibrated(loadCalibration()) || loadInputMode() === 'tap' ? 'play' : 'settings',
+  );
   const [skipped, setSkipped] = useState(false);
   const [learnSong, setLearnSong] = useState<Song | null>(null);
   const [recs, setRecs] = useState<Recording[]>(loadRecs);
@@ -20,20 +23,39 @@ export function PianoTab() {
     <div className="tab-body">
       <TopBarSlot>
         <nav className="subnav">
-          {view !== 'play' && <button onClick={() => setView('play')}>◀ Songs</button>}
-          <button
-            className={view === 'settings' ? 'on' : ''}
-            onClick={() => setView(view === 'settings' ? 'play' : 'settings')}
-          >
-            ⚙️ Settings
+          <button className={view === 'play' || view === 'record' ? 'on' : ''} onClick={() => setView('play')}>
+            🎵 Songs
+          </button>
+          <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
+            🎹 Sounds
+          </button>
+          <button className={view === 'free' ? 'on' : ''} onClick={() => setView('free')}>
+            🎶 Free play
+          </button>
+          <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
+            ⚙️<span className="lbl"> Settings</span>
           </button>
         </nav>
       </TopBarSlot>
 
+      {view === 'sounds' && <SoundLab />}
+      {view === 'free' && (
+        <div className="panel slim free-panel">
+          <FreeKeys
+            height="min(58dvh, 420px)"
+            header={
+              <span className="free-sound">
+                Sound <SoundSelect />
+              </span>
+            }
+          />
+        </div>
+      )}
       {view === 'settings' && (
         <>
           <div className="panel slim settings-row">
             <b>⚙️ Settings</b>
+            <InputModeChoice />
             <MicBoostSelect />
           </div>
           {isCalibrated(cal) && (
@@ -63,7 +85,7 @@ export function PianoTab() {
       )}
       {view === 'play' && (
         <>
-          {!isCalibrated(cal) && (
+          {!isCalibrated(cal) && loadInputMode() === 'mic' && (
             <div className="hint">
               Tip:{' '}
               <button className="link" onClick={() => setView('settings')}>

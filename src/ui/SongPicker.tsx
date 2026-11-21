@@ -36,6 +36,7 @@ export function SongPicker({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad: boolean } | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
+  const [showImport, setShowImport] = useState(false);
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     if (isPicture(f)) {
@@ -57,7 +58,10 @@ export function SongPicker({
     }
   };
   const own = songs.filter((s) => s.id.startsWith('rec-'));
-  const groups = LEVELS.map((l) => ({ ...l, songs: songs.filter((s) => s.level === l.level && !s.id.startsWith('rec-')) }));
+  const groups = LEVELS.map((l) => ({
+    ...l,
+    songs: songs.filter((s) => s.level === l.level && !s.id.startsWith('rec-')),
+  }));
   const card = (s: Song) => {
     const b = badge?.(s);
     return (
@@ -119,19 +123,48 @@ export function SongPicker({
                 </div>
               );
             })}
-            <button className="song-card import-card" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <button className="song-card import-card" disabled={busy} onClick={() => setShowImport(true)}>
               <span className="song-emoji">{busy ? '⏳' : '➕'}</span>
               <b>Import sheet music</b>
-              <span className="muted small">A photo or screenshot of printed music, or a MusicXML / MIDI file</span>
+              <span className="muted small">From a photo, screenshot or music file</span>
             </button>
           </div>
           <input ref={fileRef} type="file" hidden onChange={(e) => onFile(e.target.files?.[0])} />
           {msg && <div className={`toast ${msg.bad ? 'warn' : 'good'}`}>{msg.text}</div>}
-          <p className="muted small">
-            Photos and screenshots: I read printed music and show you what I found, so you can fix anything before
-            saving. Clear, straight screenshots work best. MusicXML or MIDI files from a sheet music app are the most
-            accurate. Everything stays on this device.
-          </p>
+          {showImport && (
+            <div className="modal-scrim" onClick={() => setShowImport(false)}>
+              <div
+                className="modal panel"
+                role="dialog"
+                aria-label="Import sheet music"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2>📄 Import sheet music</h2>
+                <p>
+                  Take a photo or screenshot of printed music, or pick a MusicXML or MIDI file from a sheet music app.
+                </p>
+                <p className="muted small">
+                  For photos I read the notes and show you what I found, so you can fix anything before saving. Clear,
+                  straight screenshots work best. MusicXML and MIDI files are the most accurate. Everything stays on
+                  this device.
+                </p>
+                <div className="row">
+                  <button
+                    className="btn primary"
+                    onClick={() => {
+                      setShowImport(false);
+                      fileRef.current?.click();
+                    }}
+                  >
+                    📷 Choose a photo or file
+                  </button>
+                  <button className="btn ghost" onClick={() => setShowImport(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       )}
       {afterSheetMusic}
@@ -144,7 +177,9 @@ export function SongPicker({
               <button className="song-card import-card" onClick={onAddRecording}>
                 <span className="song-emoji">➕</span>
                 <b>Record a song</b>
-                <span className="muted small">Play on your piano and I'll write it down so you can play it back or learn it</span>
+                <span className="muted small">
+                  Play on your piano and I'll write it down so you can play it back or learn it
+                </span>
               </button>
             )}
           </div>

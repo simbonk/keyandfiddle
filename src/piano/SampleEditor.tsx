@@ -6,7 +6,7 @@ import { type MySound, saveMySound } from '../audio/sampler';
  * Shows the recorded sound as a wave. Drag the yellow handles to cut off the
  * start or end; the cut-off parts stay saved, so dragging back undoes it.
  */
-export function SampleEditor({ sound }: { sound: MySound }) {
+export function SampleEditor({ sound, onDelete }: { sound: MySound; onDelete: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const len = sound.data.length;
   const [a, setA] = useState(sound.trimStart ?? 0);
@@ -70,12 +70,7 @@ export function SampleEditor({ sound }: { sound: MySound }) {
 
   return (
     <div className="sample-editor">
-      <div className="row sample-editor-head">
-        <span className="muted small">✂️ Drag the yellow handles to cut the start or end</span>
-        <button className="btn small" onClick={play}>
-          ▶ Hear it
-        </button>
-      </div>
+      <div className="muted small sample-editor-help">✂️ Drag the yellow handles to trim your sound</div>
       <canvas
         ref={canvas}
         className="wave"
@@ -100,6 +95,14 @@ export function SampleEditor({ sound }: { sound: MySound }) {
         }}
         onPointerCancel={() => (drag.current = null)}
       />
+      <div className="sample-editor-actions">
+        <button className="btn small" onClick={play}>
+          ▶ Hear it
+        </button>
+        <button className="btn small ghost" onClick={onDelete}>
+          🗑 Delete
+        </button>
+      </div>
     </div>
   );
 }

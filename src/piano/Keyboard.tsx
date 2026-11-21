@@ -30,6 +30,8 @@ export function keyLayout(start: number, end: number): KeyRect[] {
 export interface KeyHighlight {
   color: string;
   label?: string;
+  /** "Coming next": a soft dotted ring instead of a full glow. */
+  soft?: boolean;
 }
 
 /** A see-through "shadow" hand: where each finger rests, which ones play now. */
@@ -102,7 +104,7 @@ export function Keyboard({ start, end, highlights, pressed, showLabels = true, o
                 aria-label={midiName(r.midi)}
                 role="button"
               >
-                {hl && <div className="key-glow" />}
+                {hl && (hl.soft ? <div className="key-next" /> : <div className="key-glow" />)}
                 {hl?.label && <div className="key-badge">{hl.label}</div>}
                 {showLabels && !r.black && (
                   <div className="key-label" style={r.midi === 60 ? { color: FINGER_COLORS_LEFT } : undefined}>

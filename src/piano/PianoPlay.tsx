@@ -11,11 +11,48 @@ import { Keyboard, keyLayout, type KeyHighlight, type ShadowHand } from './Keybo
 import { assignFingers, handKeys } from './fingering';
 import { type PianoCalibration, matchKey, nearKey } from './calibration';
 import { type Burst, type HwNote, drawHighway, laneCenter, noteColor } from './highway';
-import { SoundLab, SoundSelect } from './SoundLab';
+import { SoundSelect } from './SoundLab';
 import { MicBoostSelect } from '../ui/MicButton';
 import { PIANO_SONGS, tagHas } from './songs';
 
 type Mode = 'wait' | 'play' | 'demo';
+export type InputMode = 'tap' | 'mic';
+
+/** Tapping the screen or playing a real piano into the mic. Tapping is the default. */
+export function loadInputMode(): InputMode {
+  try {
+    return localStorage.getItem('kf.input') === 'mic' ? 'mic' : 'tap';
+  } catch {
+    return 'tap';
+  }
+}
+/** "Play by tapping / my piano" switch for Settings. */
+export function InputModeChoice() {
+  const [m, setM] = useState<InputMode>(loadInputMode);
+  return (
+    <div className="seg">
+      {(['tap', 'mic'] as InputMode[]).map((x) => (
+        <button
+          key={x}
+          className={m === x ? 'on' : ''}
+          onClick={() => {
+            saveInputMode(x);
+            setM(x);
+          }}
+        >
+          {x === 'tap' ? '👆 Tap the screen' : '🎤 Play my piano'}
+        </button>
+      ))}
+    </div>
+  );
+}
+export function saveInputMode(m: InputMode) {
+  try {
+    localStorage.setItem('kf.input', m);
+  } catch {
+    /* ignore */
+  }
+}
 type Hands = 'both' | 'right' | 'left';
 
 interface Props {
@@ -47,12 +84,6 @@ export function PianoPlay({ cal, extraSongs = [], initialSong = null, onRecord }
         instrument="piano"
         onPick={setSong}
         onAddRecording={onRecord}
-        afterSheetMusic={
-          <section className="song-group">
-            <h3>🎹 Piano sounds</h3>
-            <SoundLab />
-          </section>
-        }
         badge={(s) => {
           const [a, b] = songRange(s, cal.startMidi);
           return b - a > 24 ? `🎹 ${Math.round((b - a) / 12)} octaves` : null;
@@ -78,6 +109,13 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     }
   });
   const [running, setRunning] = useState(false);
+  const [showOpts, setShowOpts] = useState(false);
+  const [input, setInputState] = useState<InputMode>(loadInputMode);
+  const setInput = (m: InputMode) => {
+    setInputState(m);
+    saveInputMode(m);
+    if (m === 'tap') setHeard(null);
+  };
   const [done, setDone] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; tone: 'good' | 'warn' | 'info'; id: number } | null>(null);
   const [, force] = useState(0);
@@ -150,6 +188,11 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
 
   const say = (text: string, tone: 'good' | 'warn' | 'info' = 'good') =>
     setFeedback({ text, tone, id: performance.now() });
+  useEffect(() => {
+    if (!feedback) return;
+    const t = setTimeout(() => setFeedback((f) => (f && f.id === feedback.id ? null : f)), 2200);
+    return () => clearTimeout(t);
+  }, [feedback]);
 
   const pending = () => g.current.notes.find((n) => n.state === 'pending') ?? null;
 
@@ -165,7 +208,14 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   }
 
   /** Returns the matched note's midi on a hit, else null. */
-  function tryHit(midi: number, level: number, now: number, touch: boolean, freq = 0, quietIfWrong = false): number | null {
+  function tryHit(
+    midi: number,
+    level: number,
+    now: number,
+    touch: boolean,
+    freq = 0,
+    quietIfWrong = false,
+  ): number | null {
     const st = g.current;
     const p = pending();
     if (!p) return null;
@@ -174,8 +224,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     const group = st.notes.filter((n) => n.state === 'pending' && Math.abs(n.beat - p.beat) < 0.01);
     const match = group.find(
       (n) =>
-        n.midi === midi ||
-        (!touch && (Math.abs(n.midi - midi) === 12 || (freq > 0 && nearKey(cal, freq, n.midi, 70)))),
+        n.midi === midi || (!touch && (Math.abs(n.midi - midi) === 12 || (freq > 0 && nearKey(cal, freq, n.midi, 70)))),
     );
     if (!match) {
       // stay quiet for soft sounds (people talking in the room), only flag real wrong keys
@@ -185,6 +234,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
       say(`That was ${pitchClassName(midi)}. Look for ${pitchClassName(p.midi)} 👀`, 'warn');
       return null;
     }
+    // the right note clears any "look for..." hint straight away
+    setFeedback((f) => (f && f.tone !== 'good' ? null : f));
     finishHold(now);
     const ratio = level / Math.max(0.005, cal.refLevel);
     group.forEach((n) => {
@@ -247,7 +298,11 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     }
     if (!running || mode === 'demo') return;
     if (st.hold && !st.hold.touch) {
-      if (km !== null && (km === st.hold.note.midi || Math.abs(km - st.hold.note.midi) === 12) && f.rms > st.onsetPeak * 0.1) {
+      if (
+        km !== null &&
+        (km === st.hold.note.midi || Math.abs(km - st.hold.note.midi) === 12) &&
+        f.rms > st.onsetPeak * 0.1
+      ) {
         st.hold.lastHeard = f.t;
         st.hold.note.holdFrac = Math.min(1, (f.t - st.hold.t0) / st.hold.expectedMs);
       } else if (f.t - st.hold.lastHeard > 180) {
@@ -309,7 +364,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         st.peakSinceHit = f.rms;
       }
     }
-  }, true);
+  }, input === 'mic');
 
   const canvasRef = useAnimationCanvas((ctx, w, h, now, dt) => {
     const st = g.current;
@@ -343,7 +398,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         });
       }
       const touchHold = st.hold;
-      if (touchHold && touchHold.touch) touchHold.note.holdFrac = Math.min(1, (now - touchHold.t0) / touchHold.expectedMs);
+      if (touchHold && touchHold.touch)
+        touchHold.note.holdFrac = Math.min(1, (now - touchHold.t0) / touchHold.expectedMs);
       if (!pending() && st.songBeat > songLengthBeats(song.notes) + 1) {
         setRunning(false);
         setDone(true);
@@ -376,7 +432,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   const upcoming = st.notes.filter((n) => n.state === 'pending').slice(0, 4);
   const cur = upcoming[0];
   const highlights: Record<number, KeyHighlight> = {};
-  if (upcoming[1] && upcoming[1].midi !== cur?.midi) highlights[upcoming[1].midi] = { color: 'rgba(255,255,255,0.35)', label: 'next' };
+  if (upcoming[1] && upcoming[1].midi !== cur?.midi)
+    highlights[upcoming[1].midi] = { color: 'rgba(255,255,255,0.35)', soft: true };
   if (cur) highlights[cur.midi] = { color: noteColor(cur.midi), label: cur.left ? 'L' : 'R' };
   // shadow hands: where each hand should sit for its next note(s)
   const shadows: ShadowHand[] = [];
@@ -385,7 +442,9 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
       const next = st.notes.find((n) => n.state === 'pending' && n.left === left);
       if (!next || next.handPos === undefined) continue;
       if (cur && next.beat - cur.beat > 4) continue; // that hand has a long rest
-      const group = st.notes.filter((n) => n.state === 'pending' && n.left === left && Math.abs(n.beat - next.beat) < 0.01);
+      const group = st.notes.filter(
+        (n) => n.state === 'pending' && n.left === left && Math.abs(n.beat - next.beat) < 0.01,
+      );
       const keys = handKeys(next.handPos, left);
       for (const n of group) if (n.finger) keys[n.finger - 1] = n.midi;
       const now = cur && Math.abs(next.beat - cur.beat) < 0.01;
@@ -401,61 +460,118 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
   if (heard !== null) pressed.add(heard);
 
   const startGame = async () => {
-    if (mode !== 'demo' && mic.status !== 'running') await mic.start();
+    if (input === 'mic' && mode !== 'demo' && mic.status !== 'running') await mic.start();
     if (done || !pending()) reset();
     setRunning(true);
   };
 
   return (
     <div className="game">
-      <div className="game-bar">
-        <button className="btn small ghost" onClick={onExit}>
-          ◀<span className="lbl"> Songs</span>
+      <div className={`game-bar ${feedback ? 'has-fb' : ''}`}>
+        <button className="btn small ghost back" onClick={onExit} aria-label="Back to songs">
+          ◀
         </button>
         <div className="game-title">
           {song.emoji} {song.title}
         </div>
-        <div className="seg">
+        <div className="bar-feedback" aria-live="polite">
+          {feedback && (
+            <span key={feedback.id} className={`fb-pill ${feedback.tone}`}>
+              {feedback.text}
+            </span>
+          )}
+        </div>
+        <div className="seg mode-seg">
           {(['wait', 'play', 'demo'] as Mode[]).map((m) => (
-            <button key={m} className={mode === m ? 'on' : ''} onClick={() => { setMode(m); setRunning(false); reset(); }}>
-              {m === 'wait' ? '🐢' : m === 'play' ? '🏃' : '👂'}
-              <span className="lbl">{m === 'wait' ? ' Wait for me' : m === 'play' ? ' Play along' : ' Listen'}</span>
+            <button
+              key={m}
+              className={mode === m ? 'on' : ''}
+              onClick={() => {
+                setMode(m);
+                setRunning(false);
+                reset();
+              }}
+            >
+              {m === 'wait' ? '🐢 Wait' : m === 'play' ? '🏃 Play' : '👂 Listen'}
             </button>
           ))}
         </div>
-        {hasLeft && (
-          <div className="seg">
-            {(['both', 'right', 'left'] as Hands[]).map((hh) => (
-              <button key={hh} className={hands === hh ? 'on' : ''} onClick={() => setHands(hh)} title={hh === 'both' ? 'Two hands' : hh === 'right' ? 'Right hand only (melody)' : 'Left hand only'}>
-                {hh === 'both' ? '🙌' : hh === 'right' ? '✋' : '🤚'}
-                <span className="lbl">{hh === 'both' ? ' 2 hands' : hh === 'right' ? ' Right' : ' Left'}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          className={`btn small ${showFingers ? 'primary' : 'ghost'}`}
-          title="Show which finger to use"
-          onClick={() => {
-            const v = !showFingers;
-            setShowFingers(v);
-            try {
-              localStorage.setItem('kf.fingers', v ? '1' : '0');
-            } catch {
-              /* ignore */
-            }
-          }}
-        >
-          🖐<span className="lbl"> Fingers</span>
-        </button>
-        <SoundSelect />
-        <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
-          <option value={0.5}>½×</option>
-          <option value={0.75}>¾×</option>
-          <option value={1}>1×</option>
-        </select>
         <div className="score">
           ✅ {st.hits}/{total} {st.streak >= 3 && <span>🔥{st.streak}</span>}
+        </div>
+        <div className="opts-wrap">
+          <button
+            className={`btn small ${showOpts ? 'primary' : 'ghost'}`}
+            onClick={() => setShowOpts((o) => !o)}
+            aria-expanded={showOpts}
+          >
+            ⚙️<span className="lbl"> Options</span>
+          </button>
+          {showOpts && (
+            <>
+              <div className="opts-scrim" onClick={() => setShowOpts(false)} />
+              <div className="opts-pop" role="dialog" aria-label="Song options">
+                {hasLeft && (
+                  <div className="opt-row">
+                    <span>Hands</span>
+                    <div className="seg">
+                      {(['both', 'right', 'left'] as Hands[]).map((hh) => (
+                        <button key={hh} className={hands === hh ? 'on' : ''} onClick={() => setHands(hh)}>
+                          {hh === 'both' ? '🙌 Both' : hh === 'right' ? '✋ Right' : '🤚 Left'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="opt-row">
+                  <span>Play by</span>
+                  <div className="seg">
+                    <button className={input === 'tap' ? 'on' : ''} onClick={() => setInput('tap')}>
+                      👆 Tapping
+                    </button>
+                    <button className={input === 'mic' ? 'on' : ''} onClick={() => setInput('mic')}>
+                      🎤 My piano
+                    </button>
+                  </div>
+                </div>
+                <div className="opt-row">
+                  <span>Finger numbers</span>
+                  <button
+                    className={`btn small ${showFingers ? 'primary' : 'ghost'}`}
+                    onClick={() => {
+                      const v = !showFingers;
+                      setShowFingers(v);
+                      try {
+                        localStorage.setItem('kf.fingers', v ? '1' : '0');
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                  >
+                    🖐 {showFingers ? 'On' : 'Off'}
+                  </button>
+                </div>
+                <div className="opt-row">
+                  <span>Speed</span>
+                  <select value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="speed">
+                    <option value={0.5}>½× slow</option>
+                    <option value={0.75}>¾×</option>
+                    <option value={1}>1× normal</option>
+                  </select>
+                </div>
+                <div className="opt-row">
+                  <span>Keyboard sound</span>
+                  <SoundSelect />
+                </div>
+                {input === 'mic' && (
+                  <div className="opt-row">
+                    <span>Mic boost</span>
+                    <MicBoostSelect bare />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
         <FullscreenButton />
       </div>
@@ -471,26 +587,34 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
                 {pitchClassName(n.midi)}
               </span>
               <span className="next-meta">
-                {n.left ? 'L' : 'R'}{showFingers && n.finger ? ` ${n.finger}` : ''} {n.beats >= 2 ? '𝅗𝅥' : n.beats < 1 ? '♪' : '♩'}
+                {n.left ? 'L' : 'R'}
+                {showFingers && n.finger ? ` ${n.finger}` : ''} {n.beats >= 2 ? '𝅗𝅥' : n.beats < 1 ? '♪' : '♩'}
                 {n.dyn === 'f' ? ' 💥' : n.dyn === 'p' ? ' 🌙' : ''}
               </span>
             </div>
           ))}
         </div>
-        {feedback && (
-          <div key={feedback.id} className={`float-feedback ${feedback.tone}`}>
-            {feedback.text}
-          </div>
-        )}
         {!running && !done && (
           <div className="overlay-center">
+            {mode !== 'demo' && (
+              <div className="seg input-seg">
+                <button className={input === 'tap' ? 'on' : ''} onClick={() => setInput('tap')}>
+                  👆 Tap the screen
+                </button>
+                <button className={input === 'mic' ? 'on' : ''} onClick={() => setInput('mic')}>
+                  🎤 Play my piano
+                </button>
+              </div>
+            )}
             {outOfRange && <p className="warn small">Some notes are outside your keyboard range and were skipped.</p>}
             <button className="btn big primary" onClick={startGame}>
               {st.songBeat > -3 ? '▶ Keep going' : mode === 'demo' ? '👂 Listen to it' : '▶ Start'}
             </button>
             <p className="muted small">
               {mode === 'wait'
-                ? 'The notes wait for you. Play the glowing key on your piano.'
+                ? input === 'tap'
+                  ? 'The notes wait for you. Tap the glowing key.'
+                  : 'The notes wait for you. Play the glowing key on your piano.'
                 : mode === 'play'
                   ? 'Keep up with the music! Notes keep moving.'
                   : 'Hear how the song goes first.'}
@@ -499,14 +623,31 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         )}
         {done && (
           <div className="overlay-center results">
-            <div className="big-stars">{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</div>
-            <h2>{stars === 3 ? 'Amazing!' : stars === 2 ? 'Great playing!' : stars === 1 ? 'Good start!' : 'Keep practising!'}</h2>
+            <div className="big-stars">
+              {'⭐'.repeat(stars)}
+              {'☆'.repeat(3 - stars)}
+            </div>
+            <h2>
+              {stars === 3
+                ? 'Amazing!'
+                : stars === 2
+                  ? 'Great playing!'
+                  : stars === 1
+                    ? 'Good start!'
+                    : 'Keep practising!'}
+            </h2>
             <p>
               {st.hits} of {total} notes · best streak {st.bestStreak}
               {st.niceDyn > 0 ? ` · ${st.niceDyn} perfect louds & softs` : ''}
             </p>
             <div className="row">
-              <button className="btn big primary" onClick={() => { reset(); setRunning(true); }}>
+              <button
+                className="btn big primary"
+                onClick={() => {
+                  reset();
+                  setRunning(true);
+                }}
+              >
                 Play again
               </button>
               <button className="btn" onClick={onExit}>
@@ -528,7 +669,7 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         highlights={highlights}
         shadows={shadows}
         pressed={pressed}
-        height="min(34dvh, 240px)"
+        height={input === 'tap' ? 'min(44dvh, 340px)' : 'min(34dvh, 240px)'}
         onPress={(m) => {
           voices.current.get(m)?.kill();
           voices.current.set(m, noteOn(m, 0.7));
@@ -552,9 +693,11 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
           if (h && h.touch && h.note.midi === m) finishHold(performance.now());
         }}
       />
-      <div className="heard-line muted small">
-        {heard !== null ? `🎤 hearing ${midiName(heard)}` : '🎤 listening'} <MicBoostSelect />
-      </div>
+      {input === 'mic' && (
+        <div className="heard-line muted small">
+          {heard !== null ? `🎤 hearing ${midiName(heard)}` : '🎤 listening'}
+        </div>
+      )}
     </div>
   );
 }
