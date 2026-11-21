@@ -2,6 +2,7 @@
 // finger) on the left, a bow lane (which part of the bow + direction) on the
 // right. Both tracks scroll toward the player in sync.
 
+import { midiName } from '../audio/notes';
 import { FINGER_COLORS, STRINGS, type ViolinNote } from './theory';
 
 export interface VNoteState extends ViolinNote {
@@ -67,12 +68,25 @@ export function drawViolinHighway(v: VHighwayView) {
   floor(pf, 'rgba(60,40,140,0.6)');
   floor(pb, 'rgba(40,90,120,0.55)');
 
-  // string lanes
+  // string lanes: one coloured track per string, like the touch violin
   for (let s = 0; s < 4; s++) {
     const xn = (s + 0.5) / 4;
     const a = pf(xn, 0);
     const b = pf(xn, v.visibleBeats);
     const heard = v.heardString === s;
+    const l0 = pf(xn - 0.12, 0);
+    const r0 = pf(xn + 0.12, 0);
+    const r1 = pf(xn + 0.12, v.visibleBeats);
+    const l1 = pf(xn - 0.12, v.visibleBeats);
+    ctx.fillStyle = STRINGS[s].color;
+    ctx.globalAlpha = heard ? 0.22 : 0.1;
+    ctx.beginPath();
+    ctx.moveTo(l0.x, l0.y);
+    ctx.lineTo(r0.x, r0.y);
+    ctx.lineTo(r1.x, r1.y);
+    ctx.lineTo(l1.x, l1.y);
+    ctx.closePath();
+    ctx.fill();
     ctx.strokeStyle = STRINGS[s].color;
     ctx.globalAlpha = heard ? 0.95 : 0.45;
     ctx.lineWidth = heard ? 4 : 2 + (3 - s) * 0.6;
@@ -82,9 +96,9 @@ export function drawViolinHighway(v: VHighwayView) {
     ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.fillStyle = STRINGS[s].color;
-    ctx.font = '800 18px "Baloo 2", system-ui';
+    ctx.font = '800 24px "Baloo 2", system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(STRINGS[s].name, a.x, strikeY + 24);
+    ctx.fillText(STRINGS[s].name, a.x, strikeY + 27);
   }
   // bow lane guide lines: frog, middle, tip
   for (const xn of [0, 0.5, 1]) {
@@ -139,7 +153,7 @@ export function drawViolinHighway(v: VHighwayView) {
 
     // --- finger gem on the string lane ---
     const xn = (n.fing.string + 0.5) / 4;
-    const half = 0.085;
+    const half = 0.11;
     const a = pf(xn - half, z0);
     const b = pf(xn + half, z0);
     const c = pf(xn + half, z1);
@@ -166,8 +180,8 @@ export function drawViolinHighway(v: VHighwayView) {
       ctx.stroke();
       ctx.globalAlpha = a0;
     }
-    // finger number badge at the near end
-    const r = 15 * a.s + 4;
+    // finger number badge at the near end, then the note name and the bow sign
+    const r = 21 * a.s + 4;
     const cx = (a.x + b.x) / 2;
     const cy = a.y - r * 0.6;
     ctx.beginPath();
@@ -182,6 +196,26 @@ export function drawViolinHighway(v: VHighwayView) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(n.fing.finger === 0 ? 'O' : String(n.fing.finger), cx, cy + 1);
+    const gemH = a.y - c.y;
+    if (gemH > r * 3) {
+      ctx.fillStyle = '#10082a';
+      ctx.font = `800 ${Math.round(r * 1.15)}px "Baloo 2", system-ui`;
+      ctx.fillText(midiName(n.midi).replace(/\d/, ''), cx, cy - r * 1.9);
+    }
+    if (gemH > r * 5.2) {
+      const down = n.bow.dir === 'down';
+      const by = cy - r * 3.6;
+      ctx.beginPath();
+      ctx.arc(cx, by, r * 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = down ? DOWN : UP;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#10082a';
+      ctx.stroke();
+      ctx.fillStyle = '#10082a';
+      ctx.font = `800 ${Math.round(r * 0.95)}px "Baloo 2", system-ui`;
+      ctx.fillText(down ? '⊓' : 'V', cx, by + 1);
+    }
     ctx.textBaseline = 'alphabetic';
 
     // --- bow stroke band on the bow lane ---

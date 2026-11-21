@@ -5,23 +5,24 @@ import { ViolinLessons } from './ViolinLesson';
 import { ViolinTuner } from './ViolinTuner';
 import { TouchViolinTab, ViolinSounds } from './touch/TouchViolin';
 
-// Same layout as the piano: Songs, Sounds, the touch violin, then Settings.
+// The touch violin comes first (the default, friendliest for beginners), then
+// Songs on a real violin, Sounds and Settings.
 type View = 'songs' | 'sounds' | 'touch' | 'settings';
 
 export function ViolinTab() {
-  const [view, setView] = useState<View>('songs');
+  const [view, setView] = useState<View>('touch');
   return (
     <div className="tab-body">
       <TopBarSlot>
         <nav className="subnav">
+          <button className={view === 'touch' ? 'on' : ''} onClick={() => setView('touch')}>
+            📱 Touch violin
+          </button>
           <button className={view === 'songs' ? 'on' : ''} onClick={() => setView('songs')}>
-            🎵 Songs
+            🎻 Real violin
           </button>
           <button className={view === 'sounds' ? 'on' : ''} onClick={() => setView('sounds')}>
             🎤 Sounds
-          </button>
-          <button className={view === 'touch' ? 'on' : ''} onClick={() => setView('touch')}>
-            📱 Touch violin
           </button>
           <button className={view === 'settings' ? 'on' : ''} onClick={() => setView('settings')}>
             ⚙️<span className="lbl"> Settings</span>
