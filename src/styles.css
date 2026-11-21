@@ -1834,3 +1834,14 @@ select option {
   outline: none;
   border-color: var(--primary);
 }
+/* iPad held upright: same nudge as landscape, and for the song screen's bar */
+@media (orientation: portrait) and (pointer: coarse) and (min-width: 700px) {
+  .topbar {
+    padding-top: 14px;
+  }
+}
+@media (pointer: coarse) and (min-width: 700px) {
+  .app.playing .tab-body {
+    padding-top: 14px;
+  }
+}
