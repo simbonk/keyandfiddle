@@ -9,13 +9,23 @@ import { RotateTip } from './RotateTip';
 import { loadViolin, sendStrings, silence, unlockAudio } from './engine';
 import { type DrawTargets, type ViolinOptions, TouchViolinState, VIOLIN_SIZES, drawTouchViolin, screenPxPerMm, violinLayout } from './instrument';
 import type { StringMsg } from './violinProcessor';
+import { SoundLab, useMySounds } from '../../piano/SoundLab';
+import { VIOLIN_VOICES, type ViolinVoice, setViolinVoice, useViolinVoice } from './voices';
+import { previewVoice } from './engine';
 
 /** The "Touch violin" screen: free play or a song, played on the iPad held like a violin. */
 export function TouchViolinTab() {
-  const [song, setSong] = useState<Song | null | 'free'>(null);
+  const [song, setSong] = useState<Song | null | 'free' | 'sounds'>(null);
+  const voice = useViolinVoice();
+  const mine = useMySounds();
   useEffect(() => {
     loadViolin();
   }, []);
+  if (song === 'sounds') return <ViolinSounds onBack={() => setSong(null)} />;
+  const vInfo = VIOLIN_VOICES.find((v) => v.id === voice) ?? (() => {
+    const m = mine.find((x) => `mine:${x.id}` === voice);
+    return m ? { emoji: m.emoji, name: m.name } : VIOLIN_VOICES[0];
+  })();
   if (song === 'free') return <TouchViolinPlay song={null} onExit={() => setSong(null)} />;
   if (song) return <TouchViolinPlay key={song.id} song={song} onExit={() => setSong(null)} />;
   return (
@@ -37,10 +47,66 @@ export function TouchViolinTab() {
               <b>Free play</b>
               <span className="muted small">Just play! Every note on the four strings.</span>
             </button>
+            <button className="song-card" onClick={() => setSong('sounds')}>
+              <span className="song-emoji">{vInfo.emoji}</span>
+              <b>Sounds</b>
+              <span className="muted small">Now: {vInfo.name}. Try a cello, a cat, or record your own!</span>
+            </button>
           </div>
         </>
       }
     />
+  );
+}
+
+/** Pick the touch violin's sound, or record your own. */
+function ViolinSounds({ onBack }: { onBack: () => void }) {
+  const voice = useViolinVoice();
+  return (
+    <div className="lesson">
+      <div className="row">
+        <button className="btn small ghost" onClick={onBack}>
+          ◀ Back
+        </button>
+      </div>
+      <SoundLab
+        keys={false}
+        title="Pick how your violin sounds"
+        builtIns={VIOLIN_VOICES}
+        value={voice}
+        fallback="violin"
+        onSelect={(id) => setViolinVoice(id as ViolinVoice)}
+        onPreview={() => previewVoice()}
+        recordHint="Tap the red button, then meow, sing, say hello or make any noise! Every bow stroke plays it, at the note you finger."
+      />
+    </div>
+  );
+}
+
+/** Compact sound chooser for the options popover. */
+function VoiceSelect() {
+  const voice = useViolinVoice();
+  const mine = useMySounds();
+  return (
+    <select
+      value={voice}
+      aria-label="violin sound"
+      onChange={(e) => {
+        setViolinVoice(e.target.value as ViolinVoice);
+        previewVoice();
+      }}
+    >
+      {VIOLIN_VOICES.map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.emoji} {v.name}
+        </option>
+      ))}
+      {mine.map((m) => (
+        <option key={m.id} value={`mine:${m.id}`}>
+          {m.emoji} {m.name}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -420,6 +486,10 @@ function TouchViolinPlay({ song, onExit }: { song: Song | null; onExit: () => vo
             <>
               <div className="opts-scrim" onClick={() => setShowOpts(false)} />
               <div className="opts-pop" role="dialog" aria-label="Violin options">
+                <div className="opt-row">
+                  <span>Sound</span>
+                  <VoiceSelect />
+                </div>
                 {song && (
                   <div className="opt-row">
                     <span>Speed</span>

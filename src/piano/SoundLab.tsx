@@ -5,7 +5,7 @@ import {
   type Voice,
   noteOn,
   preloadSound,
-  setSound,
+  setSound as setKeySound,
   useKeyboardSound,
 } from '../audio/instruments';
 import { getAudioContext } from '../audio/mic';
@@ -41,9 +41,33 @@ function preview(id: SoundId) {
 
 type RecState = 'idle' | 'listening' | 'hearing' | 'quiet' | 'denied' | 'error';
 
+interface LabProps {
+  keys?: boolean;
+  /** Use the lab for another instrument (the touch violin): its own sounds and selection. */
+  title?: string;
+  builtIns?: { id: string; name: string; emoji: string }[];
+  value?: string;
+  onSelect?: (id: string) => void;
+  onPreview?: (id: string) => void;
+  fallback?: string;
+  recordHint?: string;
+}
+
 /** Pick a keyboard sound, make your own from the mic (with a keyboard to try it). */
-export function SoundLab({ keys = true }: { keys?: boolean }) {
-  const sound = useKeyboardSound();
+export function SoundLab({
+  keys = true,
+  title = 'Pick how your keys sound',
+  builtIns = SOUNDS,
+  value,
+  onSelect,
+  onPreview,
+  fallback = 'grand',
+  recordHint = 'Tap the red button, then say hello, cough, clap, sneeze or sing! It turns into a whole keyboard.',
+}: LabProps) {
+  const keySound = useKeyboardSound();
+  const sound = value ?? keySound;
+  const setSound = (id: string) => (onSelect ? onSelect(id) : setKeySound(id as SoundId));
+  const hear = (id: string) => (onPreview ? onPreview(id) : preloadSound(id as SoundId).then(() => preview(id as SoundId)));
   const mine = useMySounds();
   const [rec, setRec] = useState<RecState>('idle');
   const [justMade, setJustMade] = useState<string | null>(null);
@@ -57,7 +81,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
   }, [undo]);
   const remove = (m: MySound) => {
     const wasSelected = sound === `mine:${m.id}`;
-    if (wasSelected) setSound('grand');
+    if (wasSelected) setSound(fallback);
     deleteMySound(m.id);
     setUndo({ sound: m, wasSelected });
   };
@@ -70,9 +94,9 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
 
   useEffect(() => () => recHandle.current?.stop(), []);
 
-  const pick = (id: SoundId) => {
+  const pick = (id: string) => {
     setSound(id);
-    preloadSound(id).then(() => preview(id));
+    hear(id);
   };
 
   const startRec = async () => {
@@ -103,7 +127,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
     setRec('idle');
     setJustMade(r.sound.id);
     setSound(`mine:${r.sound.id}`);
-    preview(`mine:${r.sound.id}`);
+    hear(`mine:${r.sound.id}`);
   };
 
   const full = mine.length >= MAX_MY_SOUNDS;
@@ -112,9 +136,9 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
   return (
     <div className="sound-lab">
       <div className="panel slim">
-        <b>Pick how your keys sound</b>
+        <b>{title}</b>
         <div className="sound-grid">
-          {SOUNDS.map((s) => (
+          {builtIns.map((s) => (
             <button key={s.id} className={`sound-card ${sound === s.id ? 'on' : ''}`} onClick={() => pick(s.id)}>
               <span className="sound-emoji">{s.emoji}</span>
               <span>{s.name}</span>
@@ -149,7 +173,7 @@ export function SoundLab({ keys = true }: { keys?: boolean }) {
                         ? 'Something went wrong with the microphone. Try again?'
                         : full
                           ? `You have ${MAX_MY_SOUNDS} sounds. Pick one and tap 🗑 Delete to make room.`
-                          : 'Tap the red button, then say hello, cough, clap, sneeze or sing! It turns into a whole keyboard.'}
+                          : recordHint}
             </p>
           </div>
         </div>
@@ -260,7 +284,7 @@ export function SoundSelect() {
       aria-label="keyboard sound"
       onChange={(e) => {
         const id = e.target.value as SoundId;
-        setSound(id);
+        setKeySound(id);
         preloadSound(id);
       }}
     >
