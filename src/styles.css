@@ -1897,8 +1897,12 @@ select option {
   top: auto;
   bottom: calc(100% + 8px);
 }
-.app.playing .touch-violin.neck-top {
-  margin-top: -8px;
+/* strings as close to the top edge as the screen allows */
+.app.playing .tab-body:has(.touch-violin.neck-top) {
+  padding-top: 0 !important;
+}
+.touch-violin.neck-top .tv-surface {
+  border-radius: 0 0 16px 16px;
 }
 .tv-over > * {
   pointer-events: auto;

@@ -26,8 +26,8 @@ export function TouchViolinTab() {
         <>
           <p className="muted">
             No violin needed, great for the car. Hold the iPad sideways like a violin: one hand curls over the edge to press
-            the strings on the neck, the other drags along the violin to bow. Pull away from the neck for a down bow,
-            push back for an up bow. Faster bowing plays louder. In ⚙️ Options you can put the neck on either side
+            the strings on the neck, the other bows up and down across the strings in the bow area. Pull away from
+            the edge for a down bow, push back toward it for an up bow. Faster bowing plays louder. In ⚙️ Options you can put the neck on either side
             and either edge, and pick a smaller violin for smaller hands.
           </p>
           <div className="song-grid">
