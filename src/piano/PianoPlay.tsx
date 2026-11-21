@@ -85,6 +85,8 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     hitMidi: null as number | null,
     peakSinceHit: 0,
     minSinceArm: 1,
+    // recent rough pitch readings (accepts less clean tones) for the forgiving match
+    recent: [] as { t: number; freq: number }[],
   });
 
   const outOfRange = song.notes.some((n) => n.midi !== null && (n.midi < start || n.midi > end));
@@ -141,13 +143,13 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
     const st = g.current;
     const p = pending();
     if (!p) return null;
-    const window = mode === 'wait' ? 1.25 : 0.45;
+    const window = mode === 'wait' ? 2 : 0.75;
     if (p.beat > st.songBeat + window) return null; // nothing due yet
     const group = st.notes.filter((n) => n.state === 'pending' && Math.abs(n.beat - p.beat) < 0.01);
     const match = group.find(
       (n) =>
         n.midi === midi ||
-        (!touch && (Math.abs(n.midi - midi) === 12 || (freq > 0 && nearKey(cal, freq, n.midi)))),
+        (!touch && (Math.abs(n.midi - midi) === 12 || (freq > 0 && nearKey(cal, freq, n.midi, 70)))),
     );
     if (!match) {
       // stay quiet for soft sounds (people talking in the room), only flag real wrong keys
@@ -236,14 +238,45 @@ function Game({ song, cal, onExit }: { song: Song; cal: PianoCalibration; onExit
         st.minSinceArm = f.rms;
       }
     } else st.minSinceArm = Math.min(st.minSinceArm, f.rms);
+    // Forgiving match: right after a press, if the note we're waiting for shows up in
+    // a couple of rough readings (old pianos and iPad mics often give a "fuzzy" tone
+    // that fails the strict pitch check), count it.
+    const rough = f.rawFreq && f.clarity >= 0.5 && f.rms > 0.006 ? f.rawFreq : 0;
+    if (rough) st.recent.push({ t: f.t, freq: rough });
+    while (st.recent.length && st.recent[0].t < f.t - 700) st.recent.shift();
+    const attackT = Math.max(st.lastOnsetT, st.armed && f.rms > st.minSinceArm * 1.3 ? f.t - 150 : 0);
+    if (attackT > st.lastHitT && f.t - attackT < 700) {
+      const p = pending();
+      const win = mode === 'wait' ? 2 : 0.75;
+      if (p && p.beat <= st.songBeat + win) {
+        const due = st.notes.filter((n) => n.state === 'pending' && Math.abs(n.beat - p.beat) < 0.01);
+        const since = st.recent.filter((r) => r.t >= attackT - 40);
+        const want = due.find((n) => since.filter((r) => nearKey(cal, r.freq, n.midi, 70)).length >= 2);
+        if (want && (want.midi !== st.hitMidi || st.armed)) {
+          const hit = tryHit(want.midi, Math.max(st.onsetPeak, f.rms), f.t, false);
+          if (hit !== null) {
+            st.lastHitT = f.t;
+            st.armed = false;
+            st.hitMidi = hit;
+            st.peakSinceHit = f.rms;
+            return;
+          }
+        }
+      }
+    }
     if (!f.freq) return;
     const onsetFresh = st.lastOnsetT > st.lastHitT && f.t - st.lastOnsetT < 450;
-    const rose = st.armed && f.rms > st.minSinceArm * 1.6 && f.rms > 0.008;
+    // the first instant of a hammer strike often reads as the wrong pitch: give it a moment
+    const settled = f.t - st.lastOnsetT > 160;
+    const rose = st.armed && f.rms > st.minSinceArm * 1.4 && f.rms > 0.007;
     const newKey = km !== null && km !== st.hitMidi;
     if (onsetFresh || rose || newKey) {
       const heardMidi = km ?? Math.round(f.midi);
-      const hit = tryHit(heardMidi, Math.max(st.onsetPeak, f.rms), f.t, false, f.freq, !onsetFresh);
-      if (hit !== null || onsetFresh) st.lastHitT = f.t; // consume this attack
+      const hit = tryHit(heardMidi, Math.max(st.onsetPeak, f.rms), f.t, false, f.freq, !(onsetFresh && settled));
+      // consume this attack, unless nothing was due yet (an early press shouldn't be wasted)
+      const p = pending();
+      const due = p && p.beat <= st.songBeat + (mode === 'wait' ? 2 : 0.75);
+      if (hit !== null || (onsetFresh && settled && due)) st.lastHitT = f.t;
       if (hit !== null) {
         st.armed = false;
         st.hitMidi = hit;

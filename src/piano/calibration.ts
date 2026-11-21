@@ -86,7 +86,7 @@ export function matchKey(
     const cents = centsBetween(freq, expectedFreq(c, m));
     if (!best || Math.abs(cents) < Math.abs(best.cents)) best = { midi: m, cents };
   }
-  if (!best || Math.abs(best.cents) > 60) return null;
+  if (!best || Math.abs(best.cents) > 70) return null;
   return best;
 }
 
@@ -96,10 +96,10 @@ export function matchKey(
  * calibrated pitch and standard tuning, so one badly measured key can't
  * make that key impossible to play.
  */
-export function nearKey(c: PianoCalibration, freq: number, midi: number): boolean {
+export function nearKey(c: PianoCalibration, freq: number, midi: number, calTol = 50): boolean {
   // calibrated pitch: generous; standard pitch: tighter, so a flat neighbour can't sneak in
   const refs: [number, number][] = [
-    [expectedFreq(c, midi), 50],
+    [expectedFreq(c, midi), calTol],
     [midiToFreq(midi), 30],
   ];
   for (const [ref, tol] of refs) {
