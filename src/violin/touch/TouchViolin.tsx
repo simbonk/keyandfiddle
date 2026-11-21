@@ -786,6 +786,14 @@ function TouchViolinPlay({
                       on={opts.names}
                       set={(v) => setOpt("names", v)}
                     />
+                    {portrait && (
+                      <Toggle
+                        label="Upside down"
+                        hint="Turn the violin around if it shows the wrong way up"
+                        on={opts.turn === "ccw"}
+                        set={(v) => setOpts((o) => ({ ...o, turn: v ? "ccw" : "cw" }))}
+                      />
+                    )}
                     <button
                       className="btn small primary tv-opts-done"
                       onClick={() => setShowOpts(false)}
@@ -798,15 +806,6 @@ function TouchViolinPlay({
               </>
             )}
           </div>
-          {portrait && (
-            <button aria-label="Flip"               className="btn small ghost"
-              onClick={() =>
-                setOpts((o) => ({ ...o, turn: o.turn === "cw" ? "ccw" : "cw" }))
-              }
-            >
-              <Icon name="flip" /><span className="lbl"> Flip</span>
-            </button>
-          )}
           <button
             className="btn small ghost"
             onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))}
