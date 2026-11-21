@@ -1398,6 +1398,19 @@ select option {
 }
 .pi-sheet svg.adding {
   cursor: crosshair;
+  touch-action: pan-x pan-y;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pi-off .pi-dot {
+  fill: rgba(120, 120, 120, 0.08);
+  stroke: #9a9a9a;
+  stroke-dasharray: 3 3;
+}
+.pi-off .pi-label {
+  fill: #9a9a9a;
+  text-decoration: line-through;
 }
 .pi-dot {
   fill: rgba(255, 80, 160, 0.12);

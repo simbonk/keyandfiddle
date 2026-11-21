@@ -51,7 +51,9 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
   const [res, setRes] = useState<OmrResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sel, setSel] = useState<number | null>(null);
-  const [adding, setAdding] = useState(false);
+  // notes switched off with a tap: kept on screen (dimmed) so a second tap brings them back
+  const [off, setOff] = useState<Set<number>>(() => new Set());
+  const press = useRef<{ id: number; timer: number; long: boolean } | null>(null);
   const [title, setTitle] = useState('My sheet music');
   const [bpm, setBpm] = useState(80);
   const [playingId, setPlayingId] = useState<number | null>(null);
@@ -81,7 +83,45 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
     };
   }, [file]);
 
-  const timeline = useMemo(() => (res ? toTimeline(res) : []), [res]);
+  const timeline = useMemo(() => (res ? toTimeline({ ...res, notes: res.notes.filter((n) => !off.has(n.id)) }) : []), [res, off]);
+  const toggle = (id: number) =>
+    setOff((o) => {
+      const n = new Set(o);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  // tap = switch the note off/on, press and hold = fix it (pitch, sharp/flat, length)
+  const downOn = (id: number) => {
+    if (press.current) clearTimeout(press.current.timer);
+    const p = { id, long: false, timer: 0 };
+    p.timer = window.setTimeout(() => {
+      p.long = true;
+      setOff((o) => {
+        if (!o.has(id)) return o;
+        const n = new Set(o);
+        n.delete(id);
+        return n;
+      });
+      setSel(id);
+      navigator.vibrate?.(15);
+    }, 450);
+    press.current = p;
+  };
+  const upOn = (id: number) => {
+    const p = press.current;
+    press.current = null;
+    if (!p || p.id !== id) return;
+    clearTimeout(p.timer);
+    if (!p.long) {
+      toggle(id);
+      if (sel === id) setSel(null);
+    }
+  };
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
   const selNote = res?.notes.find((n) => n.id === sel) ?? null;
 
   const update = (fn: (n: OmrNote) => void) => {
@@ -111,28 +151,105 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
     timers.current.push(window.setTimeout(() => setPlayingId(null), end * spb * 1000 + 300));
   };
 
-  const onSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!res || !adding) {
+  // add a note: put a finger on an empty spot, slide up/down to the right line or
+  // space (the name shows as you go), lift to place it
+  const [ghost, setGhost] = useState<OmrNote | null>(null);
+  const ghostAt = (clientX: number, clientY: number, staff?: number, x0?: number): OmrNote | null => {
+    if (!res) return null;
+    const r = svgRef.current!.getBoundingClientRect();
+    const x = x0 ?? ((clientX - r.left) / r.width) * res.w;
+    const y = ((clientY - r.top) / r.height) * res.h;
+    let si = staff ?? 0;
+    if (staff === undefined) {
+      let bd = Infinity;
+      res.staves.forEach((s, i) => {
+        const d = Math.abs(y - (s.lines[0] + s.lines[4]) / 2);
+        if (d < bd) [bd, si] = [d, i];
+      });
+      // only on (or just above/below) a staff, so a stray tap in the margin does nothing
+      if (bd > res.staves[si].space * 5) return null;
+    }
+    const st = res.staves[si];
+    const step = Math.max(-8, Math.min(16, Math.round((st.lines[4] - y) / (st.space / 2))));
+    // same length as the nearest note in that staff, so a run of eighths stays eighths
+    const near = res.notes
+      .filter((o) => o.staff === si && !o.grace && !off.has(o.id))
+      .sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0];
+    const id = Math.max(0, ...res.notes.map((n) => n.id)) + 1;
+    return { id, x, y: st.lines[4] - (step * st.space) / 2, staff: si, step, filled: true, stem: true, beams: 0, dotted: false, beats: near?.beats ?? 1 };
+  };
+  // a quick swipe still scrolls the page; a finger that rests for a moment grabs a
+  // new note, and a quick tap drops one right where it landed
+  const pending = useRef<{ x: number; y: number; timer: number; moved: boolean } | null>(null);
+  const ghostRef = useRef<OmrNote | null>(null);
+  const setG = (g: OmrNote | null) => {
+    ghostRef.current = g;
+    setGhost(g);
+  };
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const stopScroll = (e: TouchEvent) => {
+      if (ghostRef.current) e.preventDefault();
+    };
+    svg.addEventListener('touchmove', stopScroll, { passive: false });
+    return () => svg.removeEventListener('touchmove', stopScroll);
+  }, [res !== null]);
+  const place = (g: OmrNote) => {
+    if (!res) return;
+    setRes({ ...res, notes: [...res.notes, g] });
+    playNote(noteMidi(g, res.staves[g.staff], res.keySig), 0.4, 0.6);
+  };
+  const onSheetDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!res) return;
+    if (sel !== null) {
       setSel(null);
       return;
     }
-    const svg = svgRef.current!;
-    const r = svg.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * res.w;
-    const y = ((e.clientY - r.top) / r.height) * res.h;
-    let si = 0;
-    let bd = Infinity;
-    res.staves.forEach((s, i) => {
-      const d = Math.abs(y - (s.lines[0] + s.lines[4]) / 2);
-      if (d < bd) [bd, si] = [d, i];
-    });
-    const st = res.staves[si];
-    const step = Math.round((st.lines[4] - y) / (st.space / 2));
-    const id = Math.max(0, ...res.notes.map((n) => n.id)) + 1;
-    const n: OmrNote = { id, x, y: st.lines[4] - (step * st.space) / 2, staff: si, step, filled: true, stem: true, beams: 0, dotted: false, beats: 1 };
-    setRes({ ...res, notes: [...res.notes, n] });
-    setSel(id);
-    setAdding(false);
+    if (!ghostAt(e.clientX, e.clientY)) return;
+    const { clientX, clientY } = e;
+    const p = { x: clientX, y: clientY, moved: false, timer: 0 };
+    p.timer = window.setTimeout(() => {
+      if (pending.current !== p || p.moved) return;
+      const g = ghostAt(clientX, clientY);
+      if (!g) return;
+      navigator.vibrate?.(15);
+      playNote(noteMidi(g, res.staves[g.staff], res.keySig), 0.25, 0.4);
+      setG(g);
+    }, 220);
+    pending.current = p;
+  };
+  const onSheetMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const p = pending.current;
+    if (p && !ghostRef.current) {
+      if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) p.moved = true;
+      return;
+    }
+    const gh = ghostRef.current;
+    if (!gh || !res) return;
+    const g = ghostAt(e.clientX, e.clientY, gh.staff, gh.x);
+    if (g && g.step !== gh.step) {
+      setG({ ...gh, step: g.step, y: g.y });
+      playNote(noteMidi(g, res.staves[g.staff], res.keySig), 0.25, 0.4);
+    }
+  };
+  const onSheetUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    const p = pending.current;
+    pending.current = null;
+    if (p) clearTimeout(p.timer);
+    const gh = ghostRef.current;
+    if (gh) {
+      place(gh);
+      setG(null);
+    } else if (p && !p.moved) {
+      const g = ghostAt(e.clientX, e.clientY);
+      if (g) place(g);
+    }
+  };
+  const onSheetCancel = () => {
+    if (pending.current) clearTimeout(pending.current.timer);
+    pending.current = null;
+    setG(null);
   };
 
   const save = () => {
@@ -172,8 +289,9 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
       {res && (
         <>
           <p className="muted small">
-            I found {res.notes.length} notes. Tap ▶ to hear them. Pink = right hand, blue = left hand. Tap a circle to fix
-            it, or ➕ to add one I missed. Little grace notes play quickly just before the note they lead into.
+            I found {res.notes.length} notes. <b>Tap a circle</b> to switch a wrong note off (tap again to bring it back).{' '}
+            <b>Tap an empty spot</b> to add a note I missed, or <b>hold and slide up or down</b> to pick its pitch, then let go. <b>Press and hold</b> a circle to change its pitch,
+            sharp/flat or length. Pink = right hand, blue = left hand.
           </p>
           <div className="row wrap pi-controls">
             <label className="field">
@@ -209,9 +327,6 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
                 ⏹ Stop
               </button>
             )}
-            <button className={`btn ${adding ? 'primary' : ''}`} onClick={() => setAdding((a) => !a)}>
-              ➕ {adding ? 'Tap where the note goes' : 'Add a note'}
-            </button>
           </div>
           {selNote && (
             <div className="row wrap pi-edit">
@@ -242,11 +357,11 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
               <button
                 className="btn small"
                 onClick={() => {
-                  setRes({ ...res, notes: res.notes.filter((n) => n.id !== sel) });
+                  toggle(selNote.id);
                   setSel(null);
                 }}
               >
-                🗑 Remove
+                🚫 Switch off
               </button>
               <button className="btn small ghost" onClick={() => setSel(null)}>
                 Done
@@ -262,21 +377,33 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
             ref={svgRef}
             viewBox={`0 0 ${res.w} ${res.h}`}
             preserveAspectRatio="none"
-            onClick={onSvgClick}
-            className={adding ? 'adding' : ''}
+            onPointerDown={onSheetDown}
+            onPointerMove={onSheetMove}
+            onPointerUp={onSheetUp}
+            onPointerCancel={onSheetCancel}
+            className="adding"
           >
             {res.notes.map((n) => {
               const left = res.staves[n.staff].clef === 'bass' && res.staves.some((s, i) => i !== n.staff && s.system === res.staves[n.staff].system);
               const r = res.space * 0.75;
               const on = n.id === sel || n.id === playingId;
+              const isOff = off.has(n.id);
               return (
                 <g
                   key={n.id}
-                  onClick={(e) => {
+                  className={isOff ? 'pi-off' : ''}
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => {
                     e.stopPropagation();
-                    setAdding(false);
-                    setSel(n.id);
+                    downOn(n.id);
                   }}
+                  onPointerUp={(e) => {
+                    e.stopPropagation();
+                    upOn(n.id);
+                  }}
+                  onPointerLeave={cancelPress}
+                  onPointerCancel={cancelPress}
+                  onContextMenu={(e) => e.preventDefault()}
                 >
                   <ellipse
                     cx={n.x}
@@ -292,6 +419,14 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
                 </g>
               );
             })}
+            {ghost && (
+              <g className="pi-ghost">
+                <ellipse cx={ghost.x} cy={ghost.y} rx={res.space * 0.86} ry={res.space * 0.75} className="pi-dot on" strokeWidth={Math.max(1.5, res.space * 0.18)} />
+                <text x={ghost.x} y={ghost.y - res.space * 1.3} fontSize={res.space * 1.6} className="pi-label">
+                  {midiName(midiOf(ghost))}
+                </text>
+              </g>
+            )}
           </svg>
         )}
       </div>
@@ -300,7 +435,9 @@ export function PhotoImport({ file, onDone, onCancel }: { file: File; onDone: (s
           <button className="btn big primary" disabled={!res.notes.length} onClick={save}>
             ✅ Save song
           </button>
-          <span className="muted small">{timeline.length} notes</span>
+          <span className="muted small">
+            {timeline.length} notes{off.size ? `, ${off.size} switched off` : ''}
+          </span>
         </div>
       )}
     </div>
