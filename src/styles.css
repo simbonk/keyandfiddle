@@ -2699,3 +2699,37 @@ select option {
     padding-top: 16px;
   }
 }
+
+/* iPad held like a violin: the buttons run along the top of the screen and stop
+   short of the neck, so the strings still reach the top edge */
+.touch-violin.tv-bottombar.tv-topbar {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+.tv-topbar .game-bar {
+  pointer-events: auto;
+  height: 100%;
+  width: auto;
+  margin: 0 var(--neck-w) 0 0;
+  padding: 6px 8px;
+  background: #0c0820;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0 0 18px 0;
+}
+.tv-topbar.neck-left .game-bar {
+  margin: 0 0 0 var(--neck-w);
+  border-radius: 0 0 0 18px;
+}
+.tv-topbar .bar-feedback {
+  bottom: auto;
+  top: calc(100% + 90px);
+}
+.tv-topbar .game-bar {
+  flex: 1 1 auto;
+}
+/* the pause button sits just clear of the top bar */
+.tv-has-topbar .pause {
+  margin-left: 64px;
+}

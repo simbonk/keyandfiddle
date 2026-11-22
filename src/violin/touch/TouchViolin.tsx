@@ -132,6 +132,7 @@ const OPTS_KEY = "kf.tv.opts";
 const STATUS_BAR = 32;
 /** height of the bottom button bar on phones */
 const PHONE_BAR = 66;
+const TOP_BAR = 64;
 interface StoredOpts extends ViolinOptions {
   names: boolean;
   /** strings further apart than a real violin */
@@ -275,6 +276,10 @@ function TouchViolinPlay({
   // phones held like a violin: the buttons sit in a bar along the bottom
   // of the screen, so the tracks get the whole width
   const phoneBar = rot !== "none" && vp.w < 600;
+  // iPads held like a violin: the buttons run along the top, stopping short of
+  // the neck so the strings still reach the top of the screen
+  const topBar = rot !== "none" && !phoneBar;
+  const [neckW, setNeckW] = useState(200);
   // the bar runs under the home indicator too
   const barH = phoneBar ? PHONE_BAR + safeBottom() : 0;
   const frame: React.CSSProperties =
@@ -363,6 +368,10 @@ function TouchViolinPlay({
         VIOLIN_SIZES.find((z) => z[0] === opts.size)?.[1] ?? 1,
       );
       layoutKey.current = key;
+      // how much of the screen's width the neck takes (the top bar stops short of it)
+      const L = vs.L;
+      const nw = Math.round(opts.neckTop ? L.yc + L.neckHalf + 14 : h - (L.yc - L.neckHalf) + 14);
+      if (nw !== neckW) setNeckW(nw);
     }
     let waiting = false;
     let ghost: DrawTargets["ghost"] = null;
@@ -424,6 +433,7 @@ function TouchViolinPlay({
       opts.neckRight,
       readAngle,
       phone,
+      topBar ? TOP_BAR : 0,
     );
   });
 
@@ -806,6 +816,18 @@ function TouchViolinPlay({
               </>
             )}
           </div>
+          {topBar && running && (
+            <button
+              className="btn small ghost"
+              aria-label="Pause"
+              onClick={() => {
+                setRunning(false);
+                silence();
+              }}
+            >
+              <Icon name="pause" /><span className="lbl"> Pause</span>
+            </button>
+          )}
           <button
             className="btn small ghost"
             onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))}
@@ -820,12 +842,12 @@ function TouchViolinPlay({
   return (
     <>
       <div
-        className={`lesson touch-violin tv-full ${opts.neckTop ? "neck-top" : ""} ${rot !== "none" ? "tv-turned" : ""} ${angled ? "tv-angled" : ""}`}
+        className={`lesson touch-violin tv-full ${opts.neckTop ? "neck-top" : ""} ${rot !== "none" ? "tv-turned" : ""} ${angled ? "tv-angled" : ""} ${topBar ? "tv-has-topbar" : ""}`}
         style={{ ...frame, ["--tv-read" as string]: `${readDeg}deg`,
           ["--tv-straight" as string]: `${straightDeg}deg`,
         }}
       >
-        {!phoneBar && bar}
+        {!phoneBar && !topBar && bar}
 
         <div className="tv-surface">
           <canvas
@@ -915,7 +937,7 @@ function TouchViolinPlay({
                   </div>
                 </div>
               )}
-              {running && (
+              {running && !topBar && (
                 <button
                   className="btn small pause"
                   onClick={() => {
@@ -939,6 +961,18 @@ function TouchViolinPlay({
           )}
         </div>
       </div>
+      {topBar && (
+        <div
+          className={`touch-violin tv-bottombar tv-topbar ${rot === "ccw" ? "flipped" : ""} ${opts.neckTop ? "" : "neck-left"}`}
+          style={{
+            height: TOP_BAR,
+            top: rot === "ccw" ? vp.h - TOP_BAR : STATUS_BAR,
+            ["--neck-w" as string]: `${neckW}px`,
+          }}
+        >
+          {bar}
+        </div>
+      )}
       {phoneBar && (
         <div
           className={`touch-violin tv-bottombar ${rot === "ccw" ? "flipped" : ""}`}

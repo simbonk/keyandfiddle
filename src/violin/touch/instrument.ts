@@ -707,8 +707,10 @@ export function drawTouchViolin(
   mirror = false,
   readAngle = 0,
   tracksAlongStrings = false,
+  barInset = 0,
 ) {
   alongStrings = tracksAlongStrings;
+  topInset = barInset;
   // text turns toward the scroll, to face a player looking down the neck
   readRot = (-readAngle * Math.PI) / 180;
   if (!mirror && !readRot) return drawViolinSurface(ctx, st, t, showNames, now);
@@ -743,6 +745,8 @@ export function drawTouchViolin(
 let readRot = 0;
 /** note tracks run beside the strings (phones) instead of slanting across */
 let alongStrings = false;
+/** a bar of buttons covers this much of the scroll end of the music area */
+let topInset = 0;
 
 /** Run `draw` in a frame turned to the reading angle around (x, y); text inside is not turned again. */
 function turned(ctx: CanvasRenderingContext2D, x: number, y: number, draw: () => void) {
@@ -995,7 +999,7 @@ function drawViolinSurface(
     // turned, the pill reaches further along y and less along x
     const ext = { x: (tw / 2) * Math.abs(Math.cos(readRot)) + 19, y: (tw / 2) * Math.abs(Math.sin(readRot)) + 19 };
     const ly = edgeIn(Math.max(L.nutX, x), L.spacing(x)) + e * (19 + ext.y);
-    const lx = Math.max(L.x0 + ext.x, x);
+    const lx = Math.max(L.x0 + topInset + ext.x, x);
     turned(ctx, lx, ly, () => {
       ctx.fillStyle = col;
       roundRect(ctx, -tw / 2, -19, tw, 38, 19);
