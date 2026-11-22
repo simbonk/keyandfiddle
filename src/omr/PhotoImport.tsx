@@ -6,6 +6,8 @@ import { playNote } from "../audio/synth";
 import {
   type OmrNote,
   type OmrResult,
+  applyWarp,
+  findWarp,
   noteMidi,
   recognize,
   toTimeline,
@@ -58,11 +60,21 @@ async function loadGray(
   ctx.fillRect(0, 0, w, h);
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, w, h);
-  const px = ctx.getImageData(0, 0, w, h).data;
-  const data = new Uint8Array(w * h);
+  const id = ctx.getImageData(0, 0, w, h);
+  const px = id.data;
+  let data = new Uint8Array(w * h);
   for (let i = 0; i < data.length; i++)
     data[i] = (px[i * 4] * 3 + px[i * 4 + 1] * 6 + px[i * 4 + 2]) / 10;
-  return { w, h, data, url };
+  // a photo of a book page is usually a little tilted and curved: level the
+  // staff lines first, and show the levelled picture so the notes line up
+  const warp = findWarp({ w, h, data });
+  if (warp.max <= 1) return { w, h, data, url };
+  data = new Uint8Array(applyWarp(data, w, h, warp));
+  ctx.putImageData(new ImageData(applyWarp(px, w, h, warp, 4), w, h), 0, 0);
+  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.9));
+  if (!blob) return { w, h, data, url };
+  URL.revokeObjectURL(url);
+  return { w, h, data, url: URL.createObjectURL(blob) };
 }
 
 export const MAX_PAGES = 5;
