@@ -1,6 +1,6 @@
 // "Make your own sound": record one short sound from the mic (a cough, a clap,
 // a sung note) and keep it on this device so it can be played across the keyboard.
-import { getAudioContext, mic, newCaptureContext } from './mic';
+import { allowCapture, getAudioContext, mic, newCaptureContext } from './mic';
 import { freqToMidiFloat } from './notes';
 import { PitchDetector } from './pitch';
 import { stretch } from './stretch';
@@ -253,6 +253,7 @@ export interface RecordHandle {
  */
 export function recordSound(onLevel: (level: number, heard: boolean) => void): RecordHandle {
   let stopNow = () => undefined as void;
+  allowCapture();
   // made synchronously inside the tap so iOS lets it run
   const cap = newCaptureContext();
   const done = (async (): Promise<RecordOutcome> => {

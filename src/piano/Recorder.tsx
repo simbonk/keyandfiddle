@@ -50,7 +50,12 @@ export function recordingToSong(r: Recording): Song {
     bpm: 60,
     level: 1,
     blurb: 'Your own recording',
-    notes: r.notes.map((n) => ({ midi: n.midi, beat: Math.round(n.start * 8) / 8, beats: q(n.dur), tag: n.midi < 60 ? 'L' : undefined })),
+    notes: r.notes.map((n) => ({
+      midi: n.midi,
+      beat: Math.round(n.start * 8) / 8,
+      beats: q(n.dur),
+      tag: n.midi < 60 ? 'L' : undefined,
+    })),
   };
 }
 
@@ -70,7 +75,14 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
   const [lit, setLit] = useState<Set<number>>(new Set());
   const [level, setLevel] = useState(0);
   const t0 = useRef(0);
-  const cur = useRef<{ midi: number; t0: number; peak: number; lastSeen: number; cand: number | null; candN: number } | null>(null);
+  const cur = useRef<{
+    midi: number;
+    t0: number;
+    peak: number;
+    lastSeen: number;
+    cand: number | null;
+    candN: number;
+  } | null>(null);
   const notesRef = useRef<RecNote[]>([]);
   const mediaRec = useRef<MediaRecorder | null>(null);
   const playStart = useRef(0);
@@ -85,7 +97,12 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
     if (!c) return;
     const dur = (Math.min(t, c.lastSeen + 60) - c.t0) / 1000;
     if (dur > 0.07) {
-      notesRef.current.push({ midi: c.midi, start: (c.t0 - t0.current) / 1000, dur, vel: Math.min(1, c.peak / (cal.refLevel * 2)) });
+      notesRef.current.push({
+        midi: c.midi,
+        start: (c.t0 - t0.current) / 1000,
+        dur,
+        vel: Math.min(1, c.peak / (cal.refLevel * 2)),
+      });
       setLive([...notesRef.current]);
     }
     cur.current = null;
@@ -94,7 +111,7 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
   usePitchListener((f) => {
     setLevel(f.rms);
     if (!recording) return;
-    const key = f.freq ? matchKey(cal, f.freq)?.midi ?? null : null;
+    const key = f.freq ? (matchKey(cal, f.freq)?.midi ?? null) : null;
     const c = cur.current;
     if (f.onset && c) close(f.t);
     if (key === null) {
@@ -184,7 +201,7 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
     setPlaying(true);
   };
 
-  const shown = recording ? live : selected?.notes ?? [];
+  const shown = recording ? live : (selected?.notes ?? []);
   const duration = shown.reduce((m, n) => Math.max(m, n.start + n.dur), 0);
 
   const canvasRef = useAnimationCanvas((ctx, w, h) => {
@@ -207,7 +224,11 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
       ctx.fillStyle = noteColor(n.midi);
       ctx.globalAlpha = 0.45 + n.vel * 0.55;
       ctx.beginPath();
-      ctx.roundRect(n.start * px, (end - n.midi) * rh + 1, Math.max(4, n.dur * px), rh - 2, 4);
+      const rx = n.start * px,
+        ry = (end - n.midi) * rh + 1,
+        rw = Math.max(4, n.dur * px);
+      if (ctx.roundRect) ctx.roundRect(rx, ry, rw, rh - 2, 4);
+      else ctx.rect(rx, ry, rw, rh - 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -270,7 +291,11 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
               🎮 Learn it
             </button>
             <span className="muted small">
-              {selected.notes.length} notes: {selected.notes.slice(0, 8).map((n) => midiName(n.midi)).join(' ')}
+              {selected.notes.length} notes:{' '}
+              {selected.notes
+                .slice(0, 8)
+                .map((n) => midiName(n.midi))
+                .join(' ')}
               {selected.notes.length > 8 ? ' …' : ''}
             </span>
           </div>
@@ -280,7 +305,14 @@ export function Recorder({ cal, onLearn, onRecordingsChanged }: Props) {
             <h3>Saved recordings</h3>
             {recs.map((r) => (
               <div key={r.id} className={`rec-item ${selected?.id === r.id ? 'on' : ''}`}>
-                <button className="link" onClick={() => { stopPlayback(); setSelected(r); setAudioUrl(null); }}>
+                <button
+                  className="link"
+                  onClick={() => {
+                    stopPlayback();
+                    setSelected(r);
+                    setAudioUrl(null);
+                  }}
+                >
                   🎙️ {r.name} <span className="muted small">({r.notes.length} notes)</span>
                 </button>
                 <button

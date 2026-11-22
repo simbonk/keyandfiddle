@@ -87,6 +87,7 @@ export class MicEngine {
         // Sharing the playback context made iPads feed the app silence from the
         // mic once some sound had already played. If that context misbehaves we
         // fall back to the shared one (see attach and the watchdog in tick).
+        allowCapture();
         const fresh = newCaptureContext();
         let stream: MediaStream;
         try {
@@ -271,6 +272,21 @@ export class MicEngine {
 }
 
 let sharedCtx: AudioContext | null = null;
+
+/**
+ * iPhone/iPad: the touch violin sets the audio session to 'playback' so it plays
+ * through the silent switch, but Safari then refuses the mic with
+ * "InvalidStateError: AudioSession category is not compatible with audio capture".
+ * Switch to play-and-record (still plays through the silent switch) before any mic use.
+ */
+export function allowCapture() {
+  try {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession && nav.audioSession.type !== 'play-and-record') nav.audioSession.type = 'play-and-record';
+  } catch {
+    /* not supported */
+  }
+}
 
 /** A separate AudioContext for listening to the mic (null if the browser refuses). */
 export function newCaptureContext(): AudioContext | null {

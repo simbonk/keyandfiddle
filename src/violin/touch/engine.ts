@@ -23,7 +23,7 @@ function roomImpulse(ctx: BaseAudioContext, seconds = 1.6) {
       const t = i / n;
       // darker as it decays, like a wooden room
       const k = 0.25 + 0.6 * t;
-      lp += ((Math.random() * 2 - 1) - lp) * (1 - k);
+      lp += (Math.random() * 2 - 1 - lp) * (1 - k);
       d[i] = lp * Math.pow(1 - t, 3.2) * (i < 200 ? i / 200 : 1);
     }
   }
@@ -73,7 +73,8 @@ export function loadViolin(): Promise<AudioWorkletNode | null> {
   // iPhone: play through the ring/silent switch, like a music app
   try {
     const nav = navigator as Navigator & { audioSession?: { type: string } };
-    if (nav.audioSession && nav.audioSession.type === 'auto') nav.audioSession.type = 'playback';
+    // 'playback' would block the mic (tuner, listening, make-your-own-sound) until a reload
+    if (nav.audioSession && nav.audioSession.type === 'auto') nav.audioSession.type = 'play-and-record';
   } catch {
     /* not supported */
   }
@@ -187,15 +188,19 @@ export function sendStrings(msgs: StringMsg[]) {
     if (!s) continue;
     const sounding = s.bowing && Math.abs(s.vel) > 0.012;
     // a new bow stroke, or a new note under the bow
-    const fresh =
-      sounding && (!s.sounding || Math.abs(12 * Math.log2(s.freq / (s.strokeFreq || s.freq))) > 0.4);
+    const fresh = sounding && (!s.sounding || Math.abs(12 * Math.log2(s.freq / (s.strokeFreq || s.freq))) > 0.4);
     if (fresh) s.strokeFreq = s.freq;
     s.sounding = sounding;
     const level = s.bowing ? Math.min(1, Math.abs(s.vel) / 0.12) : 0;
     if (voice.startsWith('mine:')) {
       if (fresh) {
         mineVoices[i]?.kill();
-        mineVoices[i] = noteOn(Math.round(freqToMidiFloat(s.freq)), 0.5 + 0.5 * level, undefined, voice as `mine:${string}`);
+        mineVoices[i] = noteOn(
+          Math.round(freqToMidiFloat(s.freq)),
+          0.5 + 0.5 * level,
+          undefined,
+          voice as `mine:${string}`,
+        );
       }
     } else {
       if (!synths[i]) synths[i] = new SynthString(voice as SynthKind);

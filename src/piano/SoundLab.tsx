@@ -25,6 +25,7 @@ import {
 } from '../audio/sampler';
 import { Keyboard } from './Keyboard';
 import { SampleEditor } from './SampleEditor';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 export function useMySounds(): MySound[] {
   useEffect(() => {
@@ -217,7 +218,18 @@ export function SoundLab({
           const sel = mine.find((m) => sound === `mine:${m.id}`);
           return sel ? (
             <>
-              <SampleEditor sound={sel} onDelete={() => remove(sel)} askName={justMade === sel.id} />
+              <ErrorBoundary
+                resetKey={sel.id}
+                fallback={
+                  <div className="row">
+                    <button className="btn small ghost" onClick={() => remove(sel)}>
+                      🗑 Delete {sel.name}
+                    </button>
+                  </div>
+                }
+              >
+                <SampleEditor sound={sel} onDelete={() => remove(sel)} askName={justMade === sel.id} />
+              </ErrorBoundary>
               <TempoChoice />
             </>
           ) : null;

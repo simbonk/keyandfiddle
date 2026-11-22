@@ -2738,3 +2738,18 @@ select option {
   font-size: 12px;
   opacity: 0.6;
 }
+
+.crash-screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #fff;
+  text-align: center;
+  padding: 24px;
+}
+.crash-emoji {
+  font-size: 64px;
+}

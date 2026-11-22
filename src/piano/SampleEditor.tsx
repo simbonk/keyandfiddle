@@ -78,7 +78,8 @@ export function SampleEditor({
       g.fillStyle = '#ffcf33';
       g.fillRect(x - 2, 0, 4, h);
       g.beginPath();
-      g.roundRect(x - 9, h / 2 - 16, 18, 32, 6);
+      if (g.roundRect) g.roundRect(x - 9, h / 2 - 16, 18, 32, 6);
+      else g.rect(x - 9, h / 2 - 16, 18, 32);
       g.fill();
     }
   }, [a, b, len, sound.data]);
