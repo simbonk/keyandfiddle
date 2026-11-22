@@ -2435,7 +2435,8 @@ select option {
   white-space: nowrap;
 }
 .tv-turned .overlay-center > .tv-turn {
-  max-width: min(340px, 80vw);
+  /* turned, the card's width runs across the screen's width, beside the neck */
+  max-width: min(340px, 62vw);
 }
 .tv-turn .row {
   flex-wrap: wrap;
@@ -2752,4 +2753,60 @@ select option {
 }
 .crash-emoji {
   font-size: 64px;
+}
+
+/* small and older phones */
+@media (orientation: landscape) and (max-height: 430px) {
+  /* one row of buttons: the song's name goes, the buttons keep their place */
+  .touch-violin .game-bar {
+    flex-wrap: nowrap;
+  }
+  .touch-violin .game-bar .game-title,
+  .touch-violin .game-bar .lbl {
+    display: none;
+  }
+}
+@media (max-height: 600px), (max-width: 340px) {
+  /* end-of-song and start cards fit the screen and scroll if they must */
+  .overlay-center.results {
+    max-height: 100%;
+    overflow-y: auto;
+  }
+  .overlay-center.results {
+    justify-content: safe center;
+  }
+  .overlay-center.results .big-stars,
+  .tv-turn .big-stars {
+    font-size: 30px;
+  }
+  .overlay-center.results h2,
+  .tv-turn h2 {
+    font-size: 20px;
+    margin: 2px 0;
+  }
+  .overlay-center.results .btn.big,
+  .tv-turn .btn.big {
+    padding: 10px 18px;
+    font-size: 17px;
+    min-height: 0;
+  }
+}
+
+/* start and end cards: a solid card, so nothing behind them (notes, tracks,
+   the landing line) hides the buttons */
+.overlay-center > .tv-turn {
+  background: rgba(12, 8, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 14px 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 5;
+}
+.overlay-center > .tv-turn .btn:not(.primary),
+.overlay-center.results .btn:not(.primary) {
+  background: #2c2366;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  opacity: 1;
 }
