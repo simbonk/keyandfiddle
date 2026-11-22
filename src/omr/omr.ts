@@ -197,6 +197,25 @@ function findStaves(b: Bin): Staff[] {
     }
     open = next;
   }
+  // a line that isn't perfectly level can come out as two pieces a row
+  // apart (one row's run started fresh), or broken where something crosses
+  // it: join pieces at the same height that touch or nearly do
+  lines.sort((a, c) => a.y0 - c.y0);
+  for (let joined = true; joined; ) {
+    joined = false;
+    for (let i = 0; i < lines.length; i++) {
+      for (let j = i + 1; j < lines.length && lines[j].y0 <= lines[i].y1 + 2; j++) {
+        const a = lines[i];
+        const c = lines[j];
+        if (Math.min(a.x1, c.x1) - Math.max(a.x0, c.x0) <= -w * 0.02) continue;
+        a.y1 = Math.max(a.y1, c.y1);
+        a.x0 = Math.min(a.x0, c.x0);
+        a.x1 = Math.max(a.x1, c.x1);
+        lines.splice(j--, 1);
+        joined = true;
+      }
+    }
+  }
   // columns: lines that overlap sideways belong together
   const cols: Line[][] = [];
   for (const l of [...lines].sort((a, c) => a.x0 - c.x0)) {
@@ -224,11 +243,41 @@ function findStaves(b: Bin): Staff[] {
           system: 0,
         });
         // erase the staff lines where nothing crosses them
+        // (a line in a photo wanders a pixel or two around its average
+        // height, so follow the actual dark run in each column)
+        const thin = Math.max(2, Math.round(Math.min(...ls.map((l) => l.y1 - l.y0 + 1))));
+        // (and a piece of a line can be missing from the line found: follow it
+        // out to the ends of the whole staff)
+        const X0 = Math.min(...ls.map((l) => l.x0));
+        const X1 = Math.max(...ls.map((l) => l.x1));
         for (const l of ls) {
-          for (let x = l.x0; x <= l.x1; x++) {
-            const above = b.at(x, l.y0 - 1) || b.at(x, l.y0 - 2);
-            const below = b.at(x, l.y1 + 1) || b.at(x, l.y1 + 2);
-            if (!(above && below)) for (let y = l.y0; y <= l.y1; y++) b.d[y * w + x] = 0;
+          const half = (l.y1 - l.y0) / 2;
+          for (const dir of [1, -1]) {
+            let yc = Math.round((l.y0 + l.y1) / 2);
+            const from = Math.round((l.x0 + l.x1) / 2);
+            for (let x = from; dir > 0 ? x <= X1 : x >= X0; x += dir) {
+              let y = -1;
+              for (let d = 0; d <= thin + 1 && y < 0; d++) {
+                if (b.at(x, yc + d)) y = yc + d;
+                else if (b.at(x, yc - d)) y = yc - d;
+              }
+              if (y < 0) continue;
+              let a = y;
+              let c = y;
+              while (b.at(x, a - 1) && y - a < m) a--;
+              while (b.at(x, c + 1) && c - y < m) c++;
+              if (c - a + 1 > thin + 1) {
+                // something crosses the line here; keep it
+                const y0 = Math.round(yc - half);
+                const y1 = Math.round(yc + half);
+                const above = b.at(x, y0 - 1) || b.at(x, y0 - 2);
+                const below = b.at(x, y1 + 1) || b.at(x, y1 + 2);
+                if (!(above && below)) for (let yy = y0; yy <= y1; yy++) b.d[yy * w + x] = 0;
+                continue;
+              }
+              for (let yy = a; yy <= c; yy++) b.d[yy * w + x] = 0;
+              yc = Math.round((a + c) / 2);
+            }
           }
         }
         i += 5;
@@ -335,28 +384,47 @@ function findStem(b: Bin, x: number, y: number, s: number, anyWidth = false) {
 }
 
 function stemDir(b: Bin, x: number, y: number, s: number, only: number, anyWidth = false) {
-  let best = { len: 0, col: 0, end: 0, dir: only };
+  let best = { len: 0, col: 0, col0: 0, end: 0, dir: only };
   for (const dir of [only]) {
     // stem up sits on the right of the head, stem down on the left
     const side = dir < 0 ? 1 : -1;
-    for (let dx = 0.3 * s; dx <= 0.85 * s; dx += 1) {
+    for (let dx = 0.3 * s; dx <= 1.0 * s; dx += 1) {
       const col = Math.round(x + side * dx);
       let yy = Math.round(y);
       // start inside the head, walk away
       let len = 0;
       let miss = 0;
-      while (miss <= 1 && yy > 0 && yy < b.h - 1) {
+      // a hand-drawn stem (or one in a photo that isn't quite square on)
+      // leans: follow it sideways a pixel at a time, a little at most
+      let c = col;
+      const path: number[] = [];
+      // (a hand-drawn stem may start at the head's corner, past a little gap)
+      while ((miss <= 1 || (len < s * 0.7 && miss < s * 0.35)) && yy > 0 && yy < b.h - 1) {
         yy += dir;
-        if (b.at(col, yy)) {
+        if (!b.at(c, yy)) {
+          // step onto the nearest ink a pixel or two over, then to the middle of the stroke
+          let n = 0;
+          for (const k of [1, -1, 2, -2, 3, -3]) if (!n && b.at(c + k, yy) && Math.abs(c + k - col) < 1 + len * 0.45) n = k;
+          if (n) {
+            let a = c + n;
+            let z = c + n;
+            while (b.at(a - 1, yy) && z - a < s * 0.5) a--;
+            while (b.at(z + 1, yy) && z - a < s * 0.5) z++;
+            c = z - a < s * 0.5 ? Math.round((a + z) / 2) : c + n;
+          }
+        }
+        path.push(c);
+        if (b.at(c, yy)) {
           len += 1 + miss;
           miss = 0;
         } else miss++;
       }
+      const colAt = (d: number) => path[Math.max(0, Math.min(path.length - 1, Math.round(d) - 1))] ?? col;
       // must be thin (not a beam or head mass) a little away from the head
       // (in a chord the stem runs past other heads, so look along its length)
       let thin = anyWidth;
-      for (let k = 1.0; k <= Math.max(1.0, len / s - 0.3) && !thin; k += 0.5) thin = b.hRun(col, y + dir * s * k) < s * 0.6;
-      if (len > best.len && thin) best = { len, col, end: y + dir * len, dir };
+      for (let k = 1.0; k <= Math.max(1.0, len / s - 0.3) && !thin; k += 0.5) thin = b.hRun(colAt(s * k), y + dir * s * k) < s * 0.6;
+      if (len > best.len && thin) best = { len, col: colAt(len), col0: colAt(s * 0.5), end: y + dir * len, dir };
     }
   }
   return best;
@@ -391,10 +459,14 @@ function countBeams(b: Bin, stem: { col: number; end: number; dir: number; len: 
 
 function hasDot(b: Bin, x: number, y: number, s: number) {
   for (let dx = 0.95 * s; dx <= 1.9 * s; dx += 1) {
-    for (const dy of [0, -0.5 * s, 0.5 * s]) {
+    for (const dy of [0, -0.2 * s, 0.2 * s, -0.5 * s, 0.5 * s]) {
       const cx = x + dx;
       const cy = y + dy;
-      if (b.frac(cx, cy, s * 0.3, s * 0.3) > 0.75 && b.frac(cx, cy, s * 0.9, s * 0.9) < 0.3) return true;
+      if (b.frac(cx, cy, s * 0.3, s * 0.3) > 0.75 && b.frac(cx, cy, s * 0.9, s * 0.9) < 0.3) {
+        // a dot, not a thin barline or stem running through
+        if (b.frac(cx, cy - s * 0.6, s * 0.3, s * 0.3) > 0.4 && b.frac(cx, cy + s * 0.6, s * 0.3, s * 0.3) > 0.4) continue;
+        return true;
+      }
     }
   }
   return false;
@@ -452,10 +524,12 @@ function hollowHeads(b: Bin, s: number, yLo: number, yHi: number): { x: number; 
       if (open) continue;
       const bw = maxx - minx + 1;
       const bh = maxy - miny + 1;
-      if (area < s * s * 0.08 || bw < s * 0.4 || bw > s * 1.2 || bh > s * 0.85 || bh < s * 0.2) continue;
+      // (a hand-drawn whole note is a wider oval: its hole can be 1.6 spaces across)
+      if (area < s * s * 0.08 || bw < s * 0.4 || bw > s * 1.7 || bh > s * 0.85 || bh < s * 0.2) continue;
+      if (bw > s * 1.2 && bw < bh * 1.5) continue;
       const cx = sx / area;
       const cy = sy / area;
-      const ring = b.frac(cx, cy, s * 1.3, s * 0.95);
+      const ring = b.frac(cx, cy, Math.max(s * 1.3, bw + s * 0.5), Math.max(s * 0.95, bh + s * 0.45));
       if (ring < 0.3 || ring > 0.85) continue;
       out.push({ x: cx, y: cy });
     }
@@ -524,6 +598,8 @@ function components(b: Bin, X0: number, Y0: number, X1: number, Y1: number): Com
 function keySignature(b: Bin, staves: Staff[]): { key: number; start: number[] } {
   const votes = new Map<number, number>();
   const start: number[] = [];
+  const clefEnd: number[] = [];
+  const own: number[] = [];
   staves.forEach((st) => {
     const s = st.space;
     const top = st.lines[0] - s * 1.6;
@@ -532,6 +608,7 @@ function keySignature(b: Bin, staves: Staff[]): { key: number; start: number[] }
     // the clef: a big blob right at the start
     const clefs = comps.filter((c) => c.minx < st.x0 + s * 2 && c.maxy - c.miny > s * 2.5 && c.maxx - c.minx > s * 1.2);
     let edge = clefs.length ? Math.max(...clefs.map((c) => c.maxx)) : st.x0 + s * 3;
+    clefEnd.push(edge);
     // accidentals: count their vertical strokes (a sharp has two close together, a flat one)
     const strokes: number[] = [];
     let tallest = 0;
@@ -558,6 +635,55 @@ function keySignature(b: Bin, staves: Staff[]): { key: number; start: number[] }
     else cs[cs.length - 1] = x;
     let count = 0;
     let flats = 0;
+    let sure = true;
+    // a single stroke is a flat only if it has a flat's bowl at its foot
+    // (otherwise it's a broken-up sharp or a stray mark, and says nothing)
+    if (cs.length === 1) {
+      const x = cs[0];
+      let foot = -1;
+      for (let y = Math.round(bot); y >= top && foot < 0; y--) if (b.at(x, y) || b.at(x - 1, y)) foot = y;
+      let bowl = 0;
+      for (let dx = Math.round(s * 0.25); dx <= s * 0.7; dx++) for (let dy = 0; dy < s * 0.8; dy++) if (b.at(x + dx, foot - dy)) bowl++;
+      if (foot < 0 || bowl < s * s * 0.45 * 0.8 * 0.15) {
+        cs.length = 0;
+        sure = false;
+      }
+    }
+    // hand-copied music often has small sharps (under two spaces tall) the
+    // stroke scan above misses: look at the shapes right after the clef
+    if (!cs.length) {
+      const pieces = comps
+        .filter((c) => c.minx > edge - s * 0.2 && c.minx < st.x0 + s * 16)
+        .sort((a, c) => a.minx - c.minx);
+      let at = edge;
+      let sharps = 0;
+      for (const c of pieces) {
+        if (c.minx - at > s * (sharps ? 1.0 : 1.8)) break;
+        const ht = c.maxy - c.miny + 1;
+        const wd = c.maxx - c.minx + 1;
+        if (ht < s * 1.1 || ht > s * 2.8 || wd < s * 0.45 || wd > s * 2.0) break;
+        // count its upright strokes: columns dark for most of its height
+        const up: number[] = [];
+        for (let x = c.minx; x <= c.maxx; x++) {
+          let run = 0;
+          let best = 0;
+          for (let y = c.miny; y <= c.maxy; y++) {
+            if (b.at(x, y)) best = Math.max(best, ++run);
+            else run = 0;
+          }
+          if (best >= ht * 0.6 && (!up.length || x - up[up.length - 1] > 1.5)) up.push(x);
+          else if (best >= ht * 0.6) up[up.length - 1] = x;
+        }
+        if (up.length !== 2 || up[1] - up[0] > s * 0.9) break;
+        sharps++;
+        at = c.maxx;
+      }
+      if (sharps) {
+        count = Math.min(7, sharps);
+        edge = at + s * 0.2;
+        sure = true;
+      }
+    }
     if (cs.length) {
       const gaps = cs.slice(1).map((x, i) => x - cs[i]);
       const mean = gaps.length ? gaps.reduce((p, q) => p + q, 0) / gaps.length : s;
@@ -571,11 +697,17 @@ function keySignature(b: Bin, staves: Staff[]): { key: number; start: number[] }
     }
     start.push(edge + s * 0.4);
     const v = flats > count / 2 ? -count : count;
-    votes.set(v, (votes.get(v) ?? 0) + (st.system > 0 ? 2 : 1));
+    own.push(v);
+    if (sure) votes.set(v, (votes.get(v) ?? 0) + (st.system > 0 ? 2 : 1));
   });
   let key = 0;
   let bv = -1;
   for (const [k, v] of votes) if (v > bv || (v === bv && Math.abs(k) > Math.abs(key))) [key, bv] = [k, v];
+  // every staff repeats the key signature, even where it didn't read cleanly
+  // here (a faint sharp mustn't turn into a note)
+  staves.forEach((st, i) => {
+    if (key && own[i] !== key) start[i] = Math.max(start[i], clefEnd[i] + Math.abs(key) * st.space * 0.9 + st.space * 0.4);
+  });
   return { key, start };
 }
 
@@ -587,16 +719,25 @@ function findBars(b: Bin, staves: Staff[], sys: number, s: number): number[] {
   const x0 = Math.min(...sts.map((t) => t.x0));
   const x1 = Math.max(...sts.map((t) => t.x1));
   const cols: number[] = [];
+  // a hand-drawn barline (or one in a photo) can lean a little: try a few slants
+  const lean = Math.max(1, Math.round(s * 0.15));
   for (let x = Math.round(x0 + s * 0.5); x <= x1; x++) {
-    const full = sts.every((st) => {
-      let dark = 0;
-      const ya = Math.round(st.lines[0]);
-      const yb = Math.round(st.lines[4]);
-      for (let y = ya; y <= yb; y++) if (b.at(x, y)) dark++;
-      return dark >= (yb - ya + 1) * 0.95;
-    });
-    // a barline is thin: not part of a big blob (chord, beam)
-    if (full && b.hRun(x, (sts[0].lines[1] + sts[0].lines[2]) / 2) < s * 0.9) cols.push(x);
+    let found = false;
+    for (let t = 0; t <= lean * 2 && !found; t++) {
+      const tilt = t % 2 ? (t + 1) / 2 : -t / 2; // 0, 1, -1, 2, -2, ...
+      const full = sts.every((st) => {
+        let dark = 0;
+        const ya = Math.round(st.lines[0]);
+        const yb = Math.round(st.lines[4]);
+        for (let y = ya; y <= yb; y++) if (b.at(x + (tilt * (y - ya)) / Math.max(1, yb - ya), y)) dark++;
+        return dark >= (yb - ya + 1) * 0.95;
+      });
+      // a barline is thin: not part of a big blob (chord, beam)
+      const my = (sts[0].lines[1] + sts[0].lines[2]) / 2;
+      const mx = x + (tilt * (my - sts[0].lines[0])) / Math.max(1, sts[0].lines[4] - sts[0].lines[0]);
+      if (full && b.hRun(mx, my) < s * 0.9) found = true;
+    }
+    if (found) cols.push(x);
   }
   const bars: number[] = [];
   for (const x of cols) {
@@ -983,24 +1124,51 @@ export function recognize(g0: Gray): OmrResult {
     notes.push(n);
   }
 
+  // a blob whose "stem" runs straight into another note's head is a bit of a
+  // beam or flag at the far end of that note's stem, not a note
+  {
+    const ends = new Map<OmrNote, { col: number; end: number }>();
+    for (const n of notes) if (n.stem && !n.grace) ends.set(n, findStem(b, n.x, n.y, s));
+    const hits = (n: OmrNote, o: OmrNote) => {
+      const e = ends.get(n);
+      return !!e && o !== n && !o.grace && o.staff === n.staff && Math.abs(o.x - e.col) < s * 1.0 && Math.abs(o.y - e.end) < s * 0.8 && Math.abs(o.y - n.y) > s * 2;
+    };
+    // when two point at each other (the beam stub sits at the real note's
+    // stem end too), the one further out from the staff is the stub
+    const out = (n: OmrNote) => Math.abs(n.step - 4);
+    notes = notes.filter((n) => !notes.some((o) => hits(n, o) && !(hits(o, n) && out(o) > out(n))));
+  }
+
   // a "grace note" lying along a real note's stem or flag is part of that note
   {
     const spans = notes
       .filter((n) => !n.grace && n.stem)
       .map((n) => {
         const st = findStem(b, n.x, n.y, s);
-        return { col: st.col, y0: Math.min(n.y, st.end), y1: Math.max(n.y, st.end) };
+        // (a hand-drawn stem leans, so take its column at the height asked about)
+        const at = (y: number) => st.col0 + ((st.col - st.col0) * (y - n.y)) / (st.end - n.y || 1);
+        return { at, y0: Math.min(n.y, st.end), y1: Math.max(n.y, st.end) };
       });
     notes = notes.filter(
       (n) =>
         !n.grace ||
-        (!spans.some((p) => Math.abs(p.col - n.x) < s * 0.7 && n.y > p.y0 - s * 0.5 && n.y < p.y1 + s * 0.5) &&
+        (!spans.some((p) => {
+          if (n.y <= p.y0 - s * 0.5 || n.y >= p.y1 + s * 0.5) return false;
+          if (Math.abs(p.at(n.y) - n.x) < s * 0.7) return true;
+          // a short beam stub drawn out from the stem looks like a small head too
+          let a = Math.round(n.x);
+          let z = a;
+          while (b.at(a - 1, n.y) && n.x - a < s * 2) a--;
+          while (b.at(z + 1, n.y) && z - n.x < s * 2) z++;
+          return Math.abs(p.at(n.y) - a) < s * 0.3 || Math.abs(p.at(n.y) - z) < s * 0.3;
+        }) &&
           findStem(bt, n.x, n.y, s * 0.8, true).len <= s * 3.2),
     );
   }
 
   // --- barlines and time signatures (digits look like note heads)
   const bars: Record<number, number[]> = {};
+  const tsSpans: [number, number, number][] = [];
   const systems = [...new Set(staves.map((t) => t.system))];
   for (const sys of systems) {
     const sts = staves.filter((t) => t.system === sys);
@@ -1009,7 +1177,10 @@ export function recognize(g0: Gray): OmrResult {
     bars[sys] = bl;
     for (const x of [Math.max(...idx.map((i) => ks.start[i])) - s * 0.3, ...bl.map((x) => x + s * 0.3)]) {
       const ts = timeSigAt(b, sts, x, s);
-      if (ts) notes = notes.filter((n) => !(idx.includes(n.staff) && n.x >= ts[0] - s * 0.5 && n.x <= ts[1] + s * 0.5));
+      if (ts) {
+        notes = notes.filter((n) => !(idx.includes(n.staff) && n.x >= ts[0] - s * 0.5 && n.x <= ts[1] + s * 0.5));
+        for (const i of idx) tsSpans.push([i, ts[0] - s * 0.5, ts[1] + s * 0.5]);
+      }
     }
     // a "hollow head" hugging a barline is a gap between the bar and a stem
     notes = notes.filter((n) => n.filled || !idx.includes(n.staff) || !bl.some((x) => Math.abs(x - n.x) < s * 0.9));
@@ -1020,6 +1191,8 @@ export function recognize(g0: Gray): OmrResult {
   staves.forEach((st, si) => {
     const hs = notes.filter((n) => Math.abs(n.y - (st.lines[0] + st.lines[4]) / 2) < s * 9);
     for (const r of findRests(b, st, si, ks.start[si], hs, s)) {
+      // the time signature's digits are not rests
+      if (tsSpans.some(([i, a, z]) => i === si && r.x >= a && r.x <= z)) continue;
       const sysBars = bars[st.system] ?? [];
       if (sysBars.some((x) => Math.abs(x - r.x) < s * 0.6)) continue;
       r.id = id++;
@@ -1152,4 +1325,174 @@ export function toTimeline(r: OmrResult): TimedNote[] {
   }
   for (const o of out) delete o.tieOpen;
   return out.sort((a, b) => a.beat - b.beat || b.midi - a.midi);
+}
+
+// ------------------------------------------------------------------ straightening
+
+/**
+ * How far each part of the picture has to move up or down to make the staff
+ * lines level. A phone photo of a book is rarely square on: the page is
+ * tilted and bows towards the spine, often one way at the top and the other
+ * way at the bottom, so a staff line can drift by half a staff space from one
+ * end to the other. The staff finder can't follow that, and the pitch read
+ * from a head's height would be off.
+ *
+ * The page is cut into bands of rows (each about one staff tall) and narrow
+ * strips of columns; in each band, every strip's row-ink profile is matched
+ * against the middle strip's. A straight scan gives 0 everywhere.
+ */
+export interface Warp {
+  /** y of each band's centre */
+  cy: number[];
+  /** per band, the shift of every column */
+  rows: Float32Array[];
+  /** largest shift anywhere, in pixels */
+  max: number;
+}
+
+/** A rough staff space: the commonest white gap between two dark pixels down a column, plus a line. */
+function roughSpace(g: Gray, thr: number): number {
+  const { w, h, data } = g;
+  const gaps = new Array(Math.ceil(h / 8) + 1).fill(0);
+  const runs = new Array(64).fill(0);
+  for (let x = Math.round(w * 0.1); x < w * 0.9; x += 7) {
+    let y = 0;
+    let lastDark = -1;
+    while (y < h) {
+      if (data[y * w + x] <= thr) {
+        const y0 = y;
+        while (y < h && data[y * w + x] <= thr) y++;
+        if (lastDark >= 0 && y0 - lastDark < gaps.length) gaps[y0 - lastDark]++;
+        if (y - y0 < 64) runs[y - y0]++;
+        lastDark = y;
+      } else y++;
+    }
+  }
+  const mode = (a: number[], from: number) => a.reduce((bi, v, i) => (i >= from && v > a[bi] ? i : bi), from);
+  return mode(gaps, 3) + mode(runs, 1);
+}
+
+export function findWarp(g: Gray): Warp {
+  const { w, h, data } = g;
+  const thr = Math.min(200, otsu(g));
+  const flat: Warp = { cy: [h / 2], rows: [new Float32Array(w)], max: 0 };
+  const strip = Math.max(24, Math.round(w / 40));
+  const n = Math.floor(w / strip);
+  if (n < 5) return flat;
+  const sp = Math.max(4, roughSpace(g, thr));
+  // dark rows across each strip: long horizontal ink (staff lines) only, so
+  // notes and words barely move it
+  const prof: Float64Array[] = [];
+  for (let k = 0; k < n; k++) {
+    const p = new Float64Array(h);
+    for (let y = 0; y < h; y++) {
+      let c = 0;
+      const row = y * w + k * strip;
+      for (let x = 0; x < strip; x++) if (data[row + x] <= thr) c++;
+      p[y] = c > strip * 0.6 ? c : 0;
+    }
+    prof.push(p);
+  }
+  const mid = n >> 1;
+  const maxD = Math.max(3, Math.round(strip * 0.15)); // ~8 degrees per strip
+  const bandH = Math.round(sp * 6);
+  const cy: number[] = [];
+  const rows: Float32Array[] = [];
+  let max = 0;
+  for (let c = bandH / 2; c < h + bandH / 2; c += bandH / 2) {
+    const y0 = Math.max(0, Math.round(c - bandH / 2));
+    const y1 = Math.min(h, Math.round(c + bandH / 2));
+    const ink = (k: number) => {
+      let s = 0;
+      for (let y = y0; y < y1; y++) s += prof[k][y];
+      return s;
+    };
+    // the band needs a few lines' worth of ink in the middle strip
+    if (ink(mid) < strip * 0.6 * 3) continue;
+    const ref = prof[mid];
+    const match = (k: number, guess: number): number | null => {
+      if (ink(k) < strip * 0.6 * 2) return null;
+      const b = prof[k];
+      const g0 = Math.round(guess);
+      const sc: number[] = [];
+      let best = 0;
+      let bs = -1;
+      for (let d = g0 - maxD; d <= g0 + maxD; d++) {
+        let s = 0;
+        for (let y = Math.max(y0, -d); y < y1 && y + d < h; y++) s += ref[y] * b[y + d];
+        sc.push(s);
+        if (s > bs) {
+          bs = s;
+          best = d;
+        }
+      }
+      if (bs <= 0) return null;
+      const i = best - (g0 - maxD);
+      const l = sc[i - 1] ?? bs;
+      const r = sc[i + 1] ?? bs;
+      const den = l - 2 * bs + r;
+      return best + (den < 0 ? (0.5 * (l - r)) / den : 0);
+    };
+    // walk out from the middle, searching near where the last strip landed,
+    // so the lines are followed across the page even as they bow
+    const off = new Float64Array(n);
+    for (const dir of [1, -1]) {
+      let prev = 0;
+      let slope = 0;
+      for (let k = mid + dir; k >= 0 && k < n; k += dir) {
+        const m = match(k, prev + slope);
+        // strips with too little staff (margins) carry on the slope around them
+        const v = m ?? prev + slope;
+        if (m !== null) slope = slope * 0.5 + (v - prev) * 0.5;
+        off[k] = v;
+        prev = v;
+      }
+    }
+    const sm = off.map((_, k) => {
+      let s = 0;
+      let cnt = 0;
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) {
+        s += off[j];
+        cnt++;
+      }
+      return s / cnt;
+    });
+    const row = new Float32Array(w);
+    for (let x = 0; x < w; x++) {
+      const f = (x - strip / 2) / strip;
+      const k = Math.max(0, Math.min(n - 2, Math.floor(f)));
+      const t = Math.max(-1, Math.min(2, f - k));
+      row[x] = sm[k] + (sm[k + 1] - sm[k]) * t;
+      max = Math.max(max, Math.abs(row[x]));
+    }
+    cy.push((y0 + y1) / 2);
+    rows.push(row);
+  }
+  if (!rows.length) return flat;
+  return { cy, rows, max };
+}
+
+/** Move each pixel up or down by the warp (1 or 4 bytes per pixel), white where nothing comes in. */
+export function applyWarp(src: Uint8Array | Uint8ClampedArray, w: number, h: number, warp: Warp, ch = 1): Uint8ClampedArray<ArrayBuffer> {
+  const out = new Uint8ClampedArray(src.length).fill(255);
+  const { cy, rows } = warp;
+  let bi = 0;
+  for (let y = 0; y < h; y++) {
+    while (bi + 1 < cy.length && cy[bi + 1] <= y) bi++;
+    const a = rows[bi];
+    const b = rows[Math.min(bi + 1, rows.length - 1)];
+    const span = bi + 1 < cy.length ? cy[bi + 1] - cy[bi] : 1;
+    const t = Math.max(0, Math.min(1, (y - cy[bi]) / span));
+    for (let x = 0; x < w; x++) {
+      const sy = y + a[x] + (b[x] - a[x]) * t;
+      const y0 = Math.floor(sy);
+      const f = sy - y0;
+      if (y0 < 0 || y0 + 1 >= h) continue;
+      const p = (y0 * w + x) * ch;
+      const q = p + w * ch;
+      const o = (y * w + x) * ch;
+      for (let c = 0; c < ch; c++) out[o + c] = src[p + c] * (1 - f) + src[q + c] * f;
+    }
+  }
+  return out;
 }
