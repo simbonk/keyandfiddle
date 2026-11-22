@@ -22,7 +22,7 @@ export interface MySound {
   created: number;
 }
 
-export const MAX_MY_SOUNDS = 6;
+export const MAX_MY_SOUNDS = 25;
 export const MAX_SAMPLE_SEC = 3;
 export const SOUND_EMOJIS = [
   '🤧',
