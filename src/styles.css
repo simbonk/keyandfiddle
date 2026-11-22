@@ -2733,3 +2733,8 @@ select option {
 .tv-has-topbar .pause {
   margin-left: 64px;
 }
+.mic-detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+}

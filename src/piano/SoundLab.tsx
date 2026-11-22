@@ -74,6 +74,7 @@ export function SoundLab({
     onPreview ? onPreview(id) : preloadSound(id as SoundId).then(() => preview(id as SoundId));
   const mine = useMySounds();
   const [rec, setRec] = useState<RecState>('idle');
+  const [recDetail, setRecDetail] = useState('');
   const [justMade, setJustMade] = useState<string | null>(null);
   const [level, setLevel] = useState(0);
   const recHandle = useRef<ReturnType<typeof recordSound> | null>(null);
@@ -120,6 +121,7 @@ export function SoundLab({
     setLevel(0);
     if (!r.ok) {
       setRec(r.reason);
+      setRecDetail(r.detail ?? '');
       return;
     }
     try {
@@ -172,13 +174,14 @@ export function SoundLab({
                   : rec === 'quiet'
                     ? "I didn't hear anything. Tap the button and try a bit louder!"
                     : rec === 'denied'
-                      ? 'The microphone is blocked. Allow it in the browser settings, then try again.'
+                      ? 'The microphone is blocked. On iPad: Settings app → Safari → Microphone → Allow, then reload.'
                       : rec === 'error'
                         ? 'Something went wrong with the microphone. Try again?'
                         : full
                           ? `You have ${MAX_MY_SOUNDS} sounds. Pick one and tap 🗑 Delete to make room.`
                           : recordHint}
             </p>
+            {(rec === 'quiet' || rec === 'error') && recDetail && <p className="mic-detail">Details: {recDetail}</p>}
           </div>
         </div>
         {mine.length > 0 && (

@@ -215,7 +215,25 @@ export function trimmed(s: MySound): Float32Array {
 
 // ---------- recording ----------
 
-export type RecordOutcome = { ok: true; sound: MySound } | { ok: false; reason: 'quiet' | 'denied' | 'error' };
+export type RecordOutcome =
+  | { ok: true; sound: MySound }
+  | { ok: false; reason: 'quiet' | 'denied' | 'error'; detail?: string };
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new DOMException('timed out', 'TimeoutError')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
 
 export interface RecordHandle {
   /** Stop early (keeps what was heard so far). */
@@ -238,38 +256,65 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
   // made synchronously inside the tap so iOS lets it run
   const cap = newCaptureContext();
   const done = (async (): Promise<RecordOutcome> => {
-    let stream = mic.stream;
-    let own = false;
-    if (!stream || !stream.active || stream.getAudioTracks().every((t) => t.readyState !== 'live')) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          // auto gain on: iPad mics are much quieter than iPhone ones
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
-        });
-        own = true;
-      } catch (e) {
-        cap?.close().catch(() => undefined);
-        const n = (e as DOMException)?.name;
-        return { ok: false, reason: n === 'NotAllowedError' || n === 'SecurityError' ? 'denied' : 'error' };
-      }
+    const steps: string[] = []; // short trail shown with an error, to pin down iPad problems
+    // iPads only let one thing use the mic at a time: free it from the listener first
+    if (mic.status === 'running' || mic.stream) mic.stop();
+    let stream: MediaStream;
+    try {
+      stream = await withTimeout(
+        navigator.mediaDevices
+          .getUserMedia({
+            // auto gain on: iPad mics are much quieter than iPhone ones
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+          })
+          .catch((e) => {
+            const n = (e as DOMException)?.name;
+            if (n === 'NotAllowedError' || n === 'SecurityError') throw e;
+            steps.push(`retry plain mic (${n})`);
+            return navigator.mediaDevices.getUserMedia({ audio: true });
+          }),
+        8000,
+      );
+    } catch (e) {
+      cap?.close().catch(() => undefined);
+      const n = (e as DOMException)?.name;
+      if (n === 'NotAllowedError' || n === 'SecurityError') return { ok: false, reason: 'denied' };
+      return {
+        ok: false,
+        reason: 'error',
+        detail: n === 'TimeoutError' ? 'the iPad never answered the mic request' : `${n}: ${(e as Error)?.message}`,
+      };
     }
-    const ctx = cap ?? getAudioContext();
-    ctx.resume().catch(() => undefined); // not awaited: can stay pending on iPads
+    const own = true;
+    steps.push(`mic ${stream.getAudioTracks()[0]?.readyState ?? 'none'}`);
 
-    // backup copy of the raw mic, independent of Web Audio
+    // the main copy of the sound: MediaRecorder works even when Web Audio gets silence
     let rec: MediaRecorder | null = null;
     const recChunks: Blob[] = [];
     try {
       if (typeof MediaRecorder !== 'undefined') {
         rec = new MediaRecorder(stream);
         rec.ondataavailable = (e) => e.data.size && recChunks.push(e.data);
-        rec.start();
+        rec.start(250);
+        steps.push('recorder on');
       }
-    } catch {
+    } catch (e) {
       rec = null;
+      steps.push(`no recorder (${(e as Error)?.name})`);
     }
 
-    const src = ctx.createMediaStreamSource(stream);
+    // Web Audio is only used to hear when the sound starts and stops (and for the level ring)
+    let ctx: AudioContext = cap ?? getAudioContext();
+    let src: MediaStreamAudioSourceNode;
+    try {
+      src = ctx.createMediaStreamSource(stream);
+    } catch (e) {
+      steps.push(`fresh audio failed (${(e as Error)?.name})`);
+      cap?.close().catch(() => undefined);
+      ctx = getAudioContext();
+      src = ctx.createMediaStreamSource(stream);
+    }
+    ctx.resume().catch(() => undefined); // not awaited: can stay pending on iPads
     const proc = ctx.createScriptProcessor(2048, 1, 1);
     const mute = ctx.createGain();
     mute.gain.value = 0;
@@ -344,20 +389,24 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
     const recorded = await stopRecorder(rec, recChunks);
     if (own) stream.getTracks().forEach((t) => t.stop());
 
-    let pcm = result;
+    let pcm: Float32Array | null = null;
     let rate = sr;
-    if (!pcm || !anySignal) {
-      // live audio was silent or missed it: fall back to the MediaRecorder copy
-      const dec = recorded ? await decodeBlob(recorded) : null;
-      if (dec) {
-        pcm = dec.data;
-        rate = dec.rate;
-      }
-    }
-    if (cap) cap.close().catch(() => undefined);
-    if (!pcm) return { ok: false, reason: 'quiet' };
+    const dec = recorded ? await decodeBlob(recorded) : null;
+    if (dec) {
+      pcm = dec.data;
+      rate = dec.rate;
+      steps.push('used recorder copy');
+    } else if (result && anySignal) {
+      pcm = result;
+      steps.push('used live audio');
+    } else
+      steps.push(
+        `nothing captured (live ${anySignal ? 'ok' : 'silent'}, recorder ${recorded ? 'undecodable' : 'empty'})`,
+      );
+    if (cap && cap !== getAudioContext()) cap.close().catch(() => undefined);
+    if (!pcm) return { ok: false, reason: 'quiet', detail: steps.join(' · ') };
     const shaped = shapeSample(pcm, rate);
-    if (!shaped) return { ok: false, reason: 'quiet' };
+    if (!shaped) return { ok: false, reason: 'quiet', detail: steps.join(' · ') };
     const sr2 = rate;
     const { root, pitched } = findRoot(shaped, sr2);
     const n = sounds.length;
@@ -372,7 +421,9 @@ export function recordSound(onLevel: (level: number, heard: boolean) => void): R
       created: Date.now(),
     };
     return { ok: true, sound };
-  })().catch((): RecordOutcome => ({ ok: false, reason: 'error' }));
+  })().catch(
+    (e): RecordOutcome => ({ ok: false, reason: 'error', detail: `${(e as Error)?.name}: ${(e as Error)?.message}` }),
+  );
   return { stop: () => stopNow(), done };
 }
 
