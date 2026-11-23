@@ -4,7 +4,7 @@ import { MicBoostSelect } from '../ui/MicButton';
 import { PlayOn } from '../ui/PlayOn';
 import { useState } from 'react';
 import { ViolinLessons } from './ViolinLesson';
-import { ViolinTuner } from './ViolinTuner';
+import { TunerModal } from './ViolinTuner';
 import { TouchViolinSettings, TouchViolinTab, ViolinSounds } from './touch/TouchViolin';
 
 // Same three tabs as the piano. Songs starts on the touch violin (friendliest
@@ -15,6 +15,7 @@ const ON_KEY = 'kf.violin.on';
 
 export function ViolinTab() {
   const [view, setView] = useState<View>('songs');
+  const [tuner, setTuner] = useState(false);
   const [on, setOnState] = useState<On>(() => {
     try {
       return localStorage.getItem(ON_KEY) === 'real' ? 'real' : 'touch';
@@ -64,12 +65,26 @@ export function ViolinTab() {
             </div>
           </div>
           <TouchViolinSettings />
-          <ViolinTuner
-            onDone={() => {
-              setOn('real');
-              setView('songs');
-            }}
-          />
+          <div className="panel slim settings-list">
+            <div className="opt-row">
+              <span>
+                <b>Tuner</b>
+                <span className="muted small tv-hint">Tune your strings, and place and check finger tapes</span>
+              </span>
+              <button className="btn primary" onClick={() => setTuner(true)}>
+                <Icon name="tuner" size={18} /> Tune my violin
+              </button>
+            </div>
+          </div>
+          {tuner && (
+            <TunerModal
+              onClose={() => setTuner(false)}
+              onDone={() => {
+                setOn('real');
+                setView('songs');
+              }}
+            />
+          )}
         </div>
       )}
     </div>

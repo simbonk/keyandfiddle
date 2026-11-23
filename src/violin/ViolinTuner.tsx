@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePitchListener, usePitchState } from '../audio/hooks';
 import { centsBetween, freqToMidiFloat, midiName, midiToFreq } from '../audio/notes';
 import { ding, playNote } from '../audio/synth';
 import { LevelMeter, MicGate } from '../ui/MicButton';
-import { STRINGS } from './theory';
+import { STRINGS, stopFraction } from './theory';
+import { VIOLIN_SIZES } from './touch/instrument';
 
 const IN_TUNE = 6; // cents
 
@@ -22,12 +24,16 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
   const frame = usePitchState(true);
   const steadySince = useRef<number | null>(null);
   const smoothed = useRef<number | null>(null);
+  // while "Hear" plays its note the mic would hear it too: ignore it until it's done
+  const muteUntil = useRef(0);
+  const muted = !!frame && frame.t < muteUntil.current;
 
   // which string are we listening to?
   // a bowed string is not always a perfectly clean tone, so accept a slightly rougher pitch too
-  const heardFreq = frame
-    ? frame.freq || (frame.rawFreq && frame.clarity >= 0.6 && frame.rms > 0.01 ? frame.rawFreq : 0)
-    : 0;
+  const heardFreq =
+    frame && !muted
+      ? frame.freq || (frame.rawFreq && frame.clarity >= 0.6 && frame.rms > 0.01 ? frame.rawFreq : 0)
+      : 0;
   const detectedString = (() => {
     if (!heardFreq) return null;
     const m = freqToMidiFloat(heardFreq);
@@ -43,7 +49,7 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
   const target = STRINGS[active];
 
   usePitchListener((f) => {
-    const fq = f.freq || (f.rawFreq && f.clarity >= 0.6 && f.rms > 0.01 ? f.rawFreq : 0);
+    const fq = f.t < muteUntil.current ? 0 : f.freq || (f.rawFreq && f.clarity >= 0.6 && f.rms > 0.01 ? f.rawFreq : 0);
     if (!fq) {
       steadySince.current = null;
       return;
@@ -71,10 +77,13 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
     } else steadySince.current = null;
   });
 
-  const cents =
-    heardFreq && Math.abs(centsBetween(heardFreq, midiToFreq(target.midi))) < 300 ? (smoothed.current ?? 0) : null;
+  // near the note: the smoothed reading; way off (up to an octave): the raw one, so
+  // the needle still leans the right way and says which way to turn
+  const raw = heardFreq ? centsBetween(heardFreq, midiToFreq(target.midi)) : null;
+  const cents = raw === null || Math.abs(raw) > 1250 ? null : Math.abs(raw) < 300 ? (smoothed.current ?? raw) : raw;
   const angle = cents === null ? 0 : Math.max(-50, Math.min(50, cents)) * 1.6;
   const ok = cents !== null && Math.abs(cents) < IN_TUNE;
+  const way = cents === null ? null : cents < -50 ? 'low' : cents > 50 ? 'high' : null;
 
   // what the child is playing right now, as a note name
   const heardMidi = heardFreq ? Math.round(freqToMidiFloat(heardFreq)) : null;
@@ -162,8 +171,16 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
             </svg>
             <div className={`tuner-note ${ok ? 'ok' : ''}`} style={{ color: target.color }}>
               {target.name}
-              <span className="tuner-cents">
-                {cents === null ? '' : `${cents > 0 ? '+' : ''}${Math.round(cents)}¢`}
+              <span className={`tuner-cents ${way ? 'way' : ''}`}>
+                {cents === null
+                  ? muted
+                    ? 'Listen…'
+                    : ''
+                  : way === 'low'
+                    ? 'Too low · tune up ⬆'
+                    : way === 'high'
+                      ? 'Too high · tune down ⬇'
+                      : `${cents > 0 ? '+' : ''}${Math.round(cents)}¢`}
               </span>
             </div>
           </div>
@@ -213,7 +230,15 @@ export function ViolinTuner({ onDone }: { onDone?: () => void }) {
         <p className={`advice ${ok ? 'good' : ''}`}>{advice}</p>
         <div className="row wrap center">
           <LevelMeter level={frame?.rms ?? 0} />
-          <button className="btn small" onClick={() => playNote(target.midi, 2, 0.8, 'violin')}>
+          <button
+            className="btn small"
+            onClick={() => {
+              muteUntil.current = performance.now() + 2600;
+              steadySince.current = null;
+              smoothed.current = null;
+              playNote(target.midi, 2, 0.8, 'violin');
+            }}
+          >
             🔊 Hear {target.name}
           </button>
           {tuned.every(Boolean) && onDone && (
@@ -303,6 +328,178 @@ function TunedParty({ name, color, all }: { name: string; color: string; all: bo
         <div className="tuned-check">✓</div>
         <div>{all ? 'All strings tuned! 🎉' : `${name} is perfect!`}</div>
       </div>
+    </div>
+  );
+}
+
+/** The tuner in its own full-screen window (a sheet on bigger screens): strings, or finger tapes. */
+export function TunerModal({ onClose, onDone }: { onClose: () => void; onDone?: () => void }) {
+  const [tab, setTab] = useState<'strings' | 'tapes'>('strings');
+  return createPortal(
+    <div className="tuner-scrim" onClick={onClose}>
+      <div className="tuner-sheet" role="dialog" aria-label="Tuner" onClick={(e) => e.stopPropagation()}>
+        <div className="tuner-head">
+          <div className="seg">
+            <button className={tab === 'strings' ? 'on' : ''} onClick={() => setTab('strings')}>
+              Tune strings
+            </button>
+            <button className={tab === 'tapes' ? 'on' : ''} onClick={() => setTab('tapes')}>
+              Finger tapes
+            </button>
+          </div>
+          <button className="btn small ghost tuner-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        {tab === 'strings' ? (
+          <ViolinTuner
+            onDone={
+              onDone &&
+              (() => {
+                onDone();
+                onClose();
+              })
+            }
+          />
+        ) : (
+          <TapeGuide />
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Where beginner finger tapes go, measured from the nut, and a listening check for each. */
+const TAPES = [
+  { finger: 1, semis: 2, name: '1st finger', hint: 'pointer' },
+  { finger: 2, semis: 4, name: '2nd finger', hint: 'middle (high 2)' },
+  { finger: 3, semis: 5, name: '3rd finger', hint: 'ring' },
+  { finger: 4, semis: 7, name: '4th finger', hint: 'pinky (optional)' },
+];
+const SCALE_MM = 328;
+const TAPE_OK = 15; // cents: a tape this close is fine for a beginner
+
+function TapeGuide() {
+  const [size, setSize] = useState(() => {
+    try {
+      return (JSON.parse(localStorage.getItem('kf.tv.opts') || '{}').size as string) || '4/4';
+    } catch {
+      return '4/4';
+    }
+  });
+  const [check, setCheck] = useState<number | null>(null);
+  const k = VIOLIN_SIZES.find((z) => z[0] === size)?.[1] ?? 1;
+  const mm = (semis: number) => SCALE_MM * k * stopFraction(semis);
+  const inch = (v: number) => (v / 25.4).toFixed(2);
+
+  return (
+    <div className="panel tuner tapes">
+      <p className="muted small" style={{ margin: 0 }}>
+        Thin tape across the fingerboard shows where each finger goes. Tune the strings first, then measure from the
+        nut (the little ridge where the strings leave the pegbox) toward the bridge.
+      </p>
+      <div className="opt-row">
+        <b>Violin size</b>
+        <div className="seg">
+          {VIOLIN_SIZES.map(([n]) => (
+            <button key={n} className={n === size ? 'on' : ''} onClick={() => setSize(n)}>
+              {n}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="tape-list">
+        {TAPES.map((t, i) => (
+          <div key={t.finger} className={`tape-row ${check === i ? 'on' : ''}`}>
+            <span className="tape-dot" style={{ background: ['', '#ff9f1c', '#52d273', '#2ec4f1', '#e056fd'][t.finger] }}>
+              {t.finger}
+            </span>
+            <span className="tape-name">
+              <b>{t.name}</b>
+              <span className="muted small"> {t.hint}</span>
+            </span>
+            <span className="tape-mm">
+              <b>{Math.round(mm(t.semis))} mm</b>
+              <span className="muted small"> {inch(mm(t.semis))} in</span>
+            </span>
+            <button className={`btn small ${check === i ? 'primary' : 'ghost'}`} onClick={() => setCheck(check === i ? null : i)}>
+              Check
+            </button>
+          </div>
+        ))}
+      </div>
+      {check !== null ? (
+        <MicGate why="I listen to check each taped note.">
+          <TapeCheck key={check} semis={TAPES[check].semis} finger={TAPES[check].finger} />
+        </MicGate>
+      ) : (
+        <p className="muted small" style={{ margin: 0 }}>
+          Measure with a ruler, or press where the note sounds right and stick the tape just behind your fingertip.
+          Then tap <b>Check</b> on a tape and play it on the A string: I'll tell you if the tape needs to move.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Listen to a taped note on the A string and say which way to move the tape. */
+function TapeCheck({ semis, finger }: { semis: number; finger: number }) {
+  const frame = usePitchState(true);
+  const muteUntil = useRef(0);
+  const smoothed = useRef<number | null>(null);
+  const [good, setGood] = useState(false);
+  const target = STRINGS[2].midi + semis;
+  const steady = useRef<number | null>(null);
+  usePitchListener((f) => {
+    const fq = f.t < muteUntil.current ? 0 : f.freq;
+    if (!fq) {
+      steady.current = null;
+      return;
+    }
+    const c = centsBetween(fq, midiToFreq(target));
+    if (Math.abs(c) > 150) return;
+    smoothed.current = smoothed.current === null ? c : smoothed.current * 0.7 + c * 0.3;
+    if (Math.abs(smoothed.current) < TAPE_OK) {
+      if (steady.current === null) steady.current = f.t;
+      else if (f.t - steady.current > 700 && !good) {
+        setGood(true);
+        ding(true);
+      }
+    } else steady.current = null;
+  });
+  const heard = frame && frame.t >= muteUntil.current && frame.freq ? centsBetween(frame.freq, midiToFreq(target)) : null;
+  const near = heard !== null && Math.abs(heard) <= 150;
+  const c = near ? (smoothed.current ?? heard) : null;
+  const msg =
+    heard === null
+      ? `Press finger ${finger} right on its tape on the A string and bow.`
+      : !near
+        ? `That's ${midiName(Math.round(freqToMidiFloat(frame!.freq)))}. Aim for ${midiName(target)} on the A string.`
+        : Math.abs(c!) < TAPE_OK
+          ? 'Right on! This tape is in a good spot ✅'
+          : c! > 0
+            ? 'A bit high: move the tape a little toward the scroll (away from the bridge).'
+            : 'A bit low: move the tape a little toward the bridge.';
+  return (
+    <div className={`tape-check ${good ? 'good' : ''}`}>
+      <div className="tape-target">
+        <span style={{ color: STRINGS[2].color }}>{midiName(target)}</span>
+        <span className="muted small">
+          {c === null ? 'listening…' : `${c > 0 ? '+' : ''}${Math.round(c)}¢`}
+        </span>
+      </div>
+      <p className="advice">{msg}</p>
+      <button
+        className="btn small"
+        onClick={() => {
+          muteUntil.current = performance.now() + 2600;
+          smoothed.current = null;
+          playNote(target, 2, 0.8, 'violin');
+        }}
+      >
+        🔊 Hear {midiName(target)}
+      </button>
     </div>
   );
 }

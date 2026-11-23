@@ -6,7 +6,7 @@ import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
 import { BowMap, FingerboardMap } from './FingerboardMap';
-import { ViolinTuner } from './ViolinTuner';
+import { TunerModal } from './ViolinTuner';
 import { Icon } from '../ui/Icon';
 import { VoiceSelect } from './touch/TouchViolin';
 import { loadViolin, playBowedNote } from './touch/engine';
@@ -310,16 +310,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
         <FullscreenButton />
       </div>
 
-      {tuning && (
-        <div className="modal-scrim" onClick={() => setTuning(false)}>
-          <div className="modal panel" role="dialog" aria-label="Tune" onClick={(e) => e.stopPropagation()}>
-            <ViolinTuner onDone={() => setTuning(false)} />
-            <button className="btn ghost" onClick={() => setTuning(false)}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {tuning && <TunerModal onClose={() => setTuning(false)} onDone={() => setTuning(false)} />}
       <div className="lesson-body">
         <div className="lesson-track">
           <div className="highway-wrap">
