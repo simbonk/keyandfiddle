@@ -2,8 +2,8 @@
 //
 // The iPad is held like a violin with the scroll on the left. The neck and
 // the bow zone are drawn at real violin size along the top edge (or the bottom
-// one), G string nearest the edge: the fingers curl over the edge onto the
-// strings like they come over the G side of a violin. Finger spacing
+// one), E string nearest the edge: G D A E as the player sees them, like a
+// violin under the chin; the fingers curl over the edge onto the strings. Finger spacing
 // is what your hand will meet on a real violin. The left hand stops the
 // strings on the neck and the right hand drags along the bow zone: pull right
 // for a down bow, push left for an up bow. Where the bow hand is in the zone
@@ -120,16 +120,17 @@ export function violinLayout(w: number, h: number, mm: number, big = false, top 
     const t = Math.max(0, Math.min(1, (x - nutX) / (fbEnd - nutX)));
     return (6 + 1.6 * t) * wm;
   };
-  // G string hugs the edge the hand curls over (top, or bottom)
+  // E string hugs the edge the hand curls over (top, or bottom): looking down
+  // the neck the strings read G D A E, like on a real violin
   const e = top ? 1 : -1;
   // flush with the screen edge: the hand curls over the edge straight onto it
   const gY = top ? 1.5 : h - 1.5;
   const stringY = (s: number, x: number) => {
     if (x > fbEnd && x < padX) {
       const t = (x - fbEnd) / (padX - fbEnd);
-      return gY + e * s * (spacing(fbEnd) * (1 - t) + padSp * t);
+      return gY + e * (3 - s) * (spacing(fbEnd) * (1 - t) + padSp * t);
     }
-    return gY + e * s * spacing(x);
+    return gY + e * (3 - s) * spacing(x);
   };
   const full = stopFraction(MAX_SEMIS);
   const xToSemis = (x: number) => {
@@ -332,8 +333,8 @@ export class TouchViolinState {
     const sp = L.spacing(xx);
     let alt: number | null = null;
     if (Math.abs(off) > 0.22 * sp) {
-      // string numbers grow away from the edge the G string hugs
-      const toward = Math.sign(off) === (L.top ? 1 : -1) ? s + 1 : s - 1;
+      // string numbers fall away from the edge the E string hugs
+      const toward = Math.sign(off) === (L.top ? 1 : -1) ? s - 1 : s + 1;
       if (toward >= 0 && toward < 4) alt = toward;
     }
     return { s, alt, semis, x, y, t };
@@ -502,7 +503,7 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   const span = Math.abs(far - strike);
   const right = L.pad.x - 6;
   // One track per string, in the string's colour, side by side like the
-  // strings (E, A, D, G from left to right as the player sees them). The
+  // strings (G, D, A, E from left to right as the player sees them). The
   // tracks slant toward the scroll, the way a player holding the iPad like a
   // violin looks up the neck (they follow the word angle). Each note slides
   // down its string's track onto the landing line; the finger number on it
@@ -512,13 +513,13 @@ function drawFalling(ctx: CanvasRenderingContext2D, L: Layout, f: FallingView, n
   // and land just before it
   let ux = Math.sin(phi);
   let uy = d * Math.cos(phi);
-  // across the tracks, toward the G string's side
+  // across the tracks, toward the E string's side (the edge)
   let vx = Math.cos(phi);
   let vy = -d * Math.sin(phi);
   const LANE = alongStrings ? Math.min(66, (span - 16) / 4) : 66;
   const W = Math.round(LANE * 0.82); // note thickness
   const r = Math.round(LANE * 0.32); // badge radius
-  const off = (s: number) => (1.5 - s) * LANE;
+  const off = (s: number) => (s - 1.5) * LANE;
   let cy = strike + d * Math.max(1.5 * LANE * Math.abs(vy) + 34, span * 0.22);
   let cx = L.x0 + 1.5 * LANE * vx + Math.min(190, (right - L.x0) * 0.2);
   if (alongStrings) {
@@ -808,10 +809,10 @@ function drawViolinSurface(
   const sp0 = L.spacing(L.nutX);
   const sp1 = L.spacing(L.fbEnd);
   const e = L.d; // +1: neck on the top edge, strings go down from it
-  // fingerboard edges: the outer edge sits just past the G string, at the screen edge
-  const gNut = L.stringY(0, L.nutX);
-  const gEnd = L.stringY(0, L.fbEnd);
-  const edgeIn = (x: number, sp: number) => L.stringY(3, x) + e * sp * 0.7;
+  // fingerboard edges: the outer edge sits just past the E string, at the screen edge
+  const gNut = L.stringY(3, L.nutX);
+  const gEnd = L.stringY(3, L.fbEnd);
+  const edgeIn = (x: number, sp: number) => L.stringY(0, x) + e * sp * 0.7;
   const edgeOut = (y: number, sp: number) => y - e * sp * 0.6;
 
   // ---- bow column: the violin's belly, bowing up and down ----
@@ -847,8 +848,8 @@ function drawViolinSurface(
   ctx.restore();
   // bridge at the far end of the strings
   const brX = pad.x + pad.w - 6;
-  const padTop = L.stringY(0, pad.x) - e * 10;
-  const padBot = L.stringY(3, pad.x) + e * 10;
+  const padTop = L.stringY(3, pad.x) - e * 10;
+  const padBot = L.stringY(0, pad.x) + e * 10;
   ctx.fillStyle = '#ecd7ae';
   roundRect(ctx, brX - 4, Math.min(padTop, padBot), 8, Math.abs(padBot - padTop), 3);
   ctx.fill();
@@ -883,7 +884,7 @@ function drawViolinSurface(
   for (const [semis, label] of TAPES) {
     const x = L.semisX(semis);
     const sp = L.spacing(x);
-    const y0 = edgeOut(L.stringY(0, x), sp);
+    const y0 = edgeOut(L.stringY(3, x), sp);
     const y1 = edgeIn(x, sp);
     ctx.fillStyle = 'rgba(242,227,196,0.6)';
     ctx.fillRect(x - 1.5, Math.min(y0, y1), 3, Math.abs(y1 - y0));

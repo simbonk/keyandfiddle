@@ -43,11 +43,11 @@ describe('touch violin input', () => {
     expect(v.stopped(2)).toBe(4);
     expect(v.stopped(3)).toBe(0);
   });
-  it('the G string hugs the top edge and the bow plays the lane it is in', () => {
+  it('the E string hugs the top edge and the bow plays the lane it is in', () => {
     const v = mk();
     const L = v.L;
-    expect(L.stringY(0, L.nutX)).toBeLessThan(L.stringY(3, L.nutX));
-    expect(L.stringY(0, L.nutX)).toBeLessThan(30);
+    expect(L.stringY(3, L.nutX)).toBeLessThan(L.stringY(0, L.nutX));
+    expect(L.stringY(3, L.nutX)).toBeLessThan(30);
     v.down(2, L.laneX(1, 400), 400, 0);
     let t = 0;
     for (let i = 0; i < 15; i++) {

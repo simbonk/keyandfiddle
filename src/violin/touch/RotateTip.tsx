@@ -64,7 +64,7 @@ export function RotateGraphic() {
         {/* pegbox and fingerboard along the right edge */}
         <rect x={352} y={19} width={18} height={13} rx={3} fill="#8a4a1c" />
         <rect x={354} y={32} width={16} height={56} fill="#17140f" />
-        {['#ff4d6d', '#ffd60a', '#2ec4f1', '#52d273'].map((c, i) => (
+        {['#52d273', '#2ec4f1', '#ffd60a', '#ff4d6d'].map((c, i) => (
           <line key={c} x1={357 + i * 4} x2={357 + i * 4} y1={32} y2={110} stroke={c} strokeWidth={1.4} />
         ))}
         {/* bow area at the bottom */}
@@ -159,7 +159,7 @@ export function PhoneGraphic() {
         {/* pegbox and fingerboard along the top edge, strings run left to right */}
         <rect x={156} y={42} width={20} height={20} rx={4} fill="#8a4a1c" />
         <rect x={176} y={42} width={130} height={20} fill="#17140f" />
-        {['#52d273', '#2ec4f1', '#ffd60a', '#ff4d6d'].map((c, i) => (
+        {['#ff4d6d', '#ffd60a', '#2ec4f1', '#52d273'].map((c, i) => (
           <line key={c} x1={176} x2={376} y1={45 + i * 4.6} y2={45 + i * 4.6} stroke={c} strokeWidth={1.4} />
         ))}
         {/* bow area at the right end */}
