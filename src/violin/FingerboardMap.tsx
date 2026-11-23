@@ -5,7 +5,16 @@ import { FINGER_COLORS, STRINGS, stopFraction, type BowStroke, type Fingering } 
  * the scroll is far away (top), strings G D A E run left to right just like the
  * note lanes above, and fingers go down the board toward you.
  */
-export function FingerboardMap({ fing, next }: { fing: Fingering | null; next?: Fingering | null }) {
+export function FingerboardMap({
+  fing,
+  next,
+  heard,
+}: {
+  fing: Fingering | null;
+  next?: Fingering | null;
+  /** the note heard, as semitones above the target's open string (may be fractional) */
+  heard?: { semis: number; name: string; ok: boolean } | null;
+}) {
   const W = 190;
   const H = 200;
   const nutY = 30;
@@ -51,7 +60,51 @@ export function FingerboardMap({ fing, next }: { fing: Fingering | null; next?: 
             </text>
           </g>
         ))}
+      {fing && heard && <Heard fing={fing} heard={heard} x={x(fing.string)} y={y} top={nutY} bottom={H - 10} />}
     </svg>
+  );
+}
+
+/** Where the violin is heard on the target string, and an arrow toward the target spot. */
+function Heard({
+  fing,
+  heard,
+  x,
+  y,
+  top,
+  bottom,
+}: {
+  fing: Fingering;
+  heard: { semis: number; name: string; ok: boolean };
+  x: number;
+  y: (semis: number) => number;
+  top: number;
+  bottom: number;
+}) {
+  const hy = Math.max(top + 2, Math.min(bottom, heard.semis <= 0 ? top + 2 : y(heard.semis) - 8));
+  const ty = fing.finger === 0 ? top + 2 : y(fing.semis) - 8;
+  const col = heard.ok ? '#52d273' : '#ffffff';
+  const gap = ty - hy;
+  const side = x > 95 ? -1 : 1; // label on the roomier side
+  return (
+    <g>
+      {!heard.ok && Math.abs(gap) > 14 && (
+        <g stroke="#ffd60a" strokeWidth={3} fill="#ffd60a" strokeLinecap="round">
+          <line x1={x + side * 18} y1={hy} x2={x + side * 18} y2={ty - Math.sign(gap) * 6} />
+          <path
+            d={`M ${x + side * 18 - 6} ${ty - Math.sign(gap) * 10} L ${x + side * 18} ${ty - Math.sign(gap) * 2} L ${x + side * 18 + 6} ${ty - Math.sign(gap) * 10} Z`}
+          />
+        </g>
+      )}
+      <circle cx={x} cy={hy} r={10} fill="none" stroke={col} strokeWidth={3} />
+      <text x={x + side * 30} y={hy + 4} textAnchor={side < 0 ? 'end' : 'start'} className="fb-heard" fill={col}>
+        {heard.ok
+          ? `${heard.name} ✓`
+          : fing.finger === 0 && heard.semis > 0.5
+            ? `${heard.name}: lift finger`
+            : `${heard.name} ${gap > 0 ? '↓ down' : '↑ up'}`}
+      </text>
+    </g>
   );
 }
 

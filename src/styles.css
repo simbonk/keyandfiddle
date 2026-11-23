@@ -2984,3 +2984,7 @@ select option {
     height: 110px;
   }
 }
+.fb-heard {
+  font-size: 12px;
+  font-weight: 800;
+}

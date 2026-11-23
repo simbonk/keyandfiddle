@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { usePitchListener } from '../audio/hooks';
+import { usePitchListener, usePitchState } from '../audio/hooks';
 import { mic } from '../audio/mic';
-import { centsBetween, midiName, midiToFreq, songLengthBeats, type Song } from '../audio/notes';
+import { centsBetween, freqToMidiFloat, midiName, midiToFreq, songLengthBeats, type Song } from '../audio/notes';
 import { FullscreenButton, usePlayingMode } from '../ui/chrome';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
@@ -10,7 +10,7 @@ import { TunerModal } from './ViolinTuner';
 import { Icon } from '../ui/Icon';
 import { VoiceSelect } from './touch/TouchViolin';
 import { loadViolin, playBowedNote } from './touch/engine';
-import { STRINGS, VIOLIN_SONGS, violinNotes } from './theory';
+import { STRINGS, VIOLIN_SONGS, violinNotes, type Fingering } from './theory';
 import { type VNoteState, drawViolinHighway } from './violinHighway';
 
 export function ViolinLessons({ header }: { header?: React.ReactNode }) {
@@ -43,6 +43,21 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [speed, setSpeed] = useState(0.75);
+  const [tol, setTolState] = useState<number>(() => {
+    try {
+      return Number(localStorage.getItem(TOL_KEY)) || 60;
+    } catch {
+      return 60;
+    }
+  });
+  const setTol = (v: number) => {
+    setTolState(v);
+    try {
+      localStorage.setItem(TOL_KEY, String(v));
+    } catch {
+      /* private mode */
+    }
+  };
   const [showOpts, setShowOpts] = useState(false);
   const [tuning, setTuning] = useState(false);
   const [micErr, setMicErr] = useState<string | null>(null);
@@ -140,7 +155,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
       return;
     }
     const cents = centsBetween(f.freq, midiToFreq(p.midi));
-    if (Math.abs(cents) < 60 && st.armed) {
+    if (Math.abs(cents) < tol && st.armed) {
       if (!st.matchSince) {
         st.matchSince = f.t;
         st.centsAcc = [];
@@ -163,7 +178,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
         else if (st.hits % 4 === 0) say(['Lovely! 🎻', 'In tune! 🎯', 'Beautiful bowing ✨', 'Keep going! 🔥'][(st.hits / 4) % 4]);
         if (mode === 'wait' && st.songBeat < p.beat) st.songBeat = Math.max(st.songBeat, p.beat - 0.1);
       }
-    } else if (Math.abs(cents) >= 60) {
+    } else if (Math.abs(cents) >= tol) {
       st.matchSince = 0;
     }
   });
@@ -287,6 +302,19 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
                   </div>
                 </div>
                 <div className="opt-row">
+                  <span>
+                    How close counts
+                    <span className="muted small tv-hint">Easy lets a slightly out-of-tune note count; go stricter as you get better</span>
+                  </span>
+                  <div className="seg">
+                    {TOLS.map(([v, n]) => (
+                      <button key={v} className={tol === v ? 'on' : ''} onClick={() => setTol(v)}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="opt-row">
                   <span>Sound for Listen</span>
                   <VoiceSelect />
                 </div>
@@ -376,7 +404,7 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
               )}
             </div>
             <div className="now-maps">
-              <FingerboardMap fing={arNote?.fing ?? null} next={next?.fing ?? null} />
+              <LiveFingerboard fing={arNote?.fing ?? null} next={next?.fing ?? null} midi={arNote?.midi ?? null} tol={tol} />
               <BowMap stroke={arNote?.bow ?? null} live={null} />
             </div>
           </div>
@@ -384,4 +412,36 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
       </div>
     </div>
   );
+}
+
+const TOL_KEY = 'kf.violin.tol';
+/** cents a note may be off and still count */
+const TOLS: [number, string][] = [
+  [30, 'Strict'],
+  [60, 'Normal'],
+  [100, 'Easy'],
+];
+
+/** The little fingerboard, with where the violin is heard on the target string. */
+function LiveFingerboard({
+  fing,
+  next,
+  midi,
+  tol,
+}: {
+  fing: Fingering | null;
+  next: Fingering | null;
+  midi: number | null;
+  tol: number;
+}) {
+  const f = usePitchState(true);
+  let heard: { semis: number; name: string; ok: boolean } | null = null;
+  if (fing && midi !== null && f?.freq) {
+    const m = freqToMidiFloat(f.freq);
+    const semis = m - STRINGS[fing.string].midi;
+    // only notes that could be on this string (a little below open up to high on the board)
+    if (semis > -3 && semis < 10)
+      heard = { semis, name: midiName(Math.round(m)).replace(/\d/, ''), ok: Math.abs(m - midi) * 100 < tol };
+  }
+  return <FingerboardMap fing={fing} next={next} heard={heard} />;
 }
