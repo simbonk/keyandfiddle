@@ -77,6 +77,9 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
     peakSinceHit: 0,
     lostSince: 0,
     lastMidi: null as number | null,
+    /** when the last note was hit, and how long it was meant to last */
+    hitT: 0,
+    hitExpMs: 0,
     hits: 0,
     inTune: 0,
     bowRight: 0,
@@ -128,12 +131,23 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
 
     // re-arm for the next note after a bow change / silence / new pitch
     if (!st.armed) {
+      const nx = pending();
+      // the next note is the same pitch: choppy bowing mustn't skip through the
+      // repeats. Wait until most of the note has been played, then for a clear
+      // new bow (a real break in the sound, or a fresh attack).
+      const same = !!nx && nx.midi === st.lastMidi;
       if (!f.freq) {
         if (!st.lostSince) st.lostSince = f.t;
-        if (f.t - st.lostSince > 60) st.armed = true;
       } else st.lostSince = 0;
+      const quiet = st.lostSince ? f.t - st.lostSince : 0;
       st.peakSinceHit = Math.max(st.peakSinceHit, f.rms);
-      if (f.onset || f.rms < st.peakSinceHit * 0.45 || (midi !== null && midi !== st.lastMidi)) st.armed = true;
+      if (same) {
+        const longEnough = f.t - st.hitT > Math.max(300, st.hitExpMs * 0.6);
+        if (longEnough && (quiet > 120 || (f.onset && f.rms > st.peakSinceHit * 0.6))) st.armed = true;
+      } else {
+        if (quiet > 60) st.armed = true;
+        if (f.onset || f.rms < st.peakSinceHit * 0.45 || (midi !== null && midi !== st.lastMidi)) st.armed = true;
+      }
     }
 
     // hold tracking
@@ -173,6 +187,8 @@ function Lesson({ song, onExit }: { song: Song; onExit: () => void }) {
         st.peakSinceHit = f.rms;
         st.lastMidi = midi;
         st.matchSince = 0;
+        st.hitT = f.t;
+        st.hitExpMs = p.beats * beatMs;
         st.hold = { note: p, t0: f.t, last: f.t, expMs: p.beats * beatMs, reported: false };
         if (p.quality === 'close') say(avg > 0 ? `${midiName(p.midi)}: a little high ↓` : `${midiName(p.midi)}: a little low ↑`, 'info');
         else if (st.hits % 4 === 0) say(['Lovely! 🎻', 'In tune! 🎯', 'Beautiful bowing ✨', 'Keep going! 🔥'][(st.hits / 4) % 4]);
