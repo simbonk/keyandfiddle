@@ -3,9 +3,10 @@ import { PianoTab } from './piano/PianoTab';
 import { ChromeContext, FullscreenButton } from './ui/chrome';
 import { Icon } from './ui/Icon';
 import { ViolinTab } from './violin/ViolinTab';
+import { GuitarTab } from './guitar/GuitarTab';
 
-type Tab = 'piano' | 'violin';
-const TABS: Tab[] = ['piano', 'violin'];
+type Tab = 'piano' | 'violin' | 'guitar';
+const TABS: Tab[] = ['piano', 'violin', 'guitar'];
 
 const PHONE_Q = '(max-width: 600px) and (orientation: portrait)';
 function usePhonePortrait() {
@@ -73,11 +74,20 @@ export function App() {
               <Icon name="violin" size={18} />
               <span className="lbl">Violin</span>
             </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'guitar'}
+              className={tab === 'guitar' ? 'on' : ''}
+              onClick={() => pick('guitar')}
+            >
+              <Icon name="guitar" size={18} />
+              <span className="lbl">Guitar</span>
+            </button>
           </nav>
           {!phone && <div className="subnav-slot" ref={setSlot} />}
           <FullscreenButton className="btn small ghost fs-top" />
         </header>
-        <main className="main">{tab === 'piano' ? <PianoTab /> : <ViolinTab />}</main>
+        <main className="main">{tab === 'piano' ? <PianoTab /> : tab === 'violin' ? <ViolinTab /> : <GuitarTab />}</main>
         {phone && <nav className="tabbar" ref={setSlot} />}
       </div>
     </ChromeContext.Provider>
