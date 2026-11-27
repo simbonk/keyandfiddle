@@ -2988,3 +2988,61 @@ select option {
   font-size: 12px;
   font-weight: 800;
 }
+
+/* ---------- touch guitar ---------- */
+/* full screen while playing, like the touch violin */
+.gt-play {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--bg);
+  padding: 6px 8px 6px;
+}
+.gt-frame {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* drawn back to front so it reads right in a mirror */
+.gt-frame.gt-mirror {
+  transform: scaleX(-1);
+}
+.gt-surface {
+  min-height: 200px;
+}
+.gt-over {
+  background: transparent;
+}
+.gt-now {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  right: 12px;
+  font-weight: 800;
+  font-size: 26px;
+  pointer-events: none;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+.gt-now .small {
+  font-size: 15px;
+  margin-left: 6px;
+}
+.gt-banner span {
+  font-weight: 600;
+}
+.gt-chord-intro {
+  margin: 4px 0 10px;
+}
+.gt-chord-chart {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.gt-chord-box {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 4px;
+}

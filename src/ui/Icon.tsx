@@ -34,6 +34,21 @@ const P: Record<string, React.ReactNode> = {
       <path d="M13 11l8-8M19 2.5l2.5 2.5M9 12.5l2.5 2.5" />
     </>
   ),
+  guitar: (
+    <>
+      <path d="M13.2 10.8c-1-1-2.6-.9-3.4.1-.5.6-.5 1.5-1.3 2-1 .6-2.3.2-3.3 1.2-1.5 1.5-1.2 4 .6 5.7s4.2 2.1 5.7.6c1-1 .6-2.3 1.2-3.3.5-.8 1.4-.8 2-1.3 1-.8 1.1-2.4.1-3.4z" />
+      <path d="M12 12l8-8M18.5 2.5l3 3" />
+      <circle cx="9.8" cy="14.2" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  chords: (
+    <>
+      <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
+      <path d="M5 8h14M5 12.5h14M5 17h14M9.7 3.5v17M14.3 3.5v17" strokeWidth={1.2} />
+      <circle cx="9.7" cy="10.2" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="14.3" cy="14.8" r="1.6" fill="currentColor" stroke="none" />
+    </>
+  ),
   touch: (
     <>
       <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
