@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PitchDetector } from '../audio/pitch';
 import { renderPluck } from '../guitar/pluck';
-import { CHORDS, CHORD_SONGS, GSTRINGS, GUITAR_SONGS, guitarFingering, guitarNotes } from '../guitar/theory';
+import { CHORD_SONGS, GSTRINGS, chordOfTag, GUITAR_SONGS, guitarFingering, guitarNotes } from '../guitar/theory';
 
 const SR = 48000;
 
@@ -34,7 +34,30 @@ describe('guitar fingering', () => {
   it('chord songs only use known chords', () => {
     for (const s of CHORD_SONGS) {
       expect(s.notes.length, s.title).toBeGreaterThan(3);
-      for (const n of s.notes) expect(CHORDS[n.tag!], `${s.title} ${n.tag}`).toBeTruthy();
+      for (const n of s.notes) expect(chordOfTag(n.tag).chord, `${s.title} ${n.tag}`).toBeTruthy();
     }
+  });
+});
+
+describe('hearing chords', () => {
+  // a fake chroma from the chord's own strings, with a few harmonics
+  const chromaOf = (midis: (number | null)[]) => {
+    const c = new Array(12).fill(0.001);
+    for (const m of midis) if (m !== null) [0, 12, 19, 24].forEach((h, k) => (c[(m + h) % 12] += 1 / (k + 1)));
+    return c;
+  };
+  it('hears each chord as itself', async () => {
+    const { CHORDS, chordMidis, chordMatch } = await import('../guitar/theory');
+    for (const c of Object.values(CHORDS)) {
+      const r = chordMatch(chromaOf(chordMidis(c)), c);
+      expect(r.share, c.name).toBeGreaterThan(0.85);
+      expect(r.all, c.name).toBe(true);
+    }
+  });
+  it('does not take C for A minor, or E for E minor', async () => {
+    const { CHORDS, chordMidis, chordMatch } = await import('../guitar/theory');
+    expect(chordMatch(chromaOf(chordMidis(CHORDS.C)), CHORDS.Am).all).toBe(false);
+    const em = chordMatch(chromaOf(chordMidis(CHORDS.E)), CHORDS.Em);
+    expect(em.share < 0.7 || !em.all).toBe(true);
   });
 });

@@ -185,6 +185,30 @@ export class MicEngine {
     return false;
   }
 
+  private fbuf: Float32Array<ArrayBuffer> | null = null;
+  /**
+   * Energy in each of the 12 pitch classes (C, C#, ... B) right now, from the
+   * spectrum between ~75 Hz and 1.5 kHz: enough to tell guitar chords apart.
+   * null while the mic is off.
+   */
+  chroma(): Float32Array | null {
+    const a = this.analyser;
+    if (!a || !this.ctx) return null;
+    const n = a.frequencyBinCount;
+    if (!this.fbuf || this.fbuf.length !== n) this.fbuf = new Float32Array(n);
+    a.getFloatFrequencyData(this.fbuf);
+    const hz = this.ctx.sampleRate / a.fftSize;
+    const res = new Float32Array(12);
+    for (let i = Math.ceil(75 / hz); i < n && i * hz < 1500; i++) {
+      const db = this.fbuf[i];
+      if (!isFinite(db)) continue;
+      const mag = 10 ** (db / 20);
+      const midi = 69 + 12 * Math.log2((i * hz) / 440);
+      res[((Math.round(midi) % 12) + 12) % 12] += mag * mag;
+    }
+    return res;
+  }
+
   setBoost(b: number) {
     this.boost = b;
     if (this.boostNode) this.boostNode.gain.value = b;

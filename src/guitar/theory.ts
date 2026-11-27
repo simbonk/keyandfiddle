@@ -140,13 +140,26 @@ export function chordChart(chart: string, beatsPerBar = 4, pickup = 0): SongNote
       const shape = CHORDS[c];
       const strums = d >= 4 ? Math.round(d / 2) : 1;
       for (let k = 0; k < strums; k++) {
+        // a new chord starts with a down strum; the same chord again comes back up
         if (shape)
-          out.push({ midi: GSTRINGS[shape.frets.findIndex((f) => f >= 0)].midi, beat: t + (k * d) / strums, beats: d / strums, tag: c });
+          out.push({
+            midi: GSTRINGS[shape.frets.findIndex((f) => f >= 0)].midi,
+            beat: t + (k * d) / strums,
+            beats: d / strums,
+            tag: k % 2 ? `${c}^` : c,
+          });
       }
       t += d;
     }
   }
   return out;
+}
+
+/** The chord and strum direction stored in a chord-song note's tag ("G" = down, "G^" = up). */
+export function chordOfTag(tag?: string): { chord: ChordShape | null; up: boolean } {
+  const up = !!tag?.endsWith('^');
+  const name = up ? tag!.slice(0, -1) : (tag ?? '');
+  return { chord: CHORDS[name] ?? null, up };
 }
 
 export function isChordSong(song: Song): boolean {
@@ -284,3 +297,23 @@ export const CHORD_SONGS: Song[] = [
   chordSong('ode', 'Ode to Joy (strum)', '🎉', 3, 84, 'C | G | C | G | C | G | C | G C | G | G C | G C | G | C | G | C | G C', 'Just C and G, back and forth.'),
   chordSong('greensleeves', 'Greensleeves (strum)', '🍃', 3, 80, 'Am | C | G | Em | Am | E | E | Am | Am | C | G | Em | Am | E | E | Am', 'Am, C, G, Em and E. A waltz: one strum per bar.', 3, 1),
 ];
+
+/**
+ * How well a pitch-class energy profile (from the microphone) matches a chord:
+ * the share of energy in the chord's notes, and whether every chord note is
+ * actually there (so C is not mistaken for A minor).
+ */
+export function chordMatch(chroma: ArrayLike<number>, c: ChordShape): { share: number; all: boolean } {
+  const pcs = new Set(chordMidis(c).filter((m): m is number => m !== null).map((m) => m % 12));
+  let total = 0;
+  let inChord = 0;
+  let max = 0;
+  for (let i = 0; i < 12; i++) {
+    total += chroma[i];
+    max = Math.max(max, chroma[i]);
+    if (pcs.has(i)) inChord += chroma[i];
+  }
+  if (total <= 0) return { share: 0, all: false };
+  const all = [...pcs].every((p) => chroma[p] >= max * 0.06);
+  return { share: inChord / total, all };
+}
