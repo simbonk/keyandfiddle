@@ -1,18 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePitchListener, useMicStatus } from '../audio/hooks';
+import { mic } from '../audio/mic';
 import { midiName, songLengthBeats, type Song } from '../audio/notes';
+import { SoundLab, useMySounds } from '../piano/SoundLab';
 import { FullscreenButton, TopBarSlot, usePlayingMode } from '../ui/chrome';
 import { Icon } from '../ui/Icon';
+import { MicBoostSelect } from '../ui/MicButton';
+import { PlayOn } from '../ui/PlayOn';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
-import { GuitarState, dampAll, drawGuitar, guitarLayout } from './instrument';
-import { pluck, silenceGuitar, strum, unlockGuitar } from './pluck';
+import { screenPxPerMm } from '../violin/touch/instrument';
+import { GUITAR_SIZES, GuitarState, drawGuitar, guitarLayout, type FallingChord } from './instrument';
+import {
+  GUITAR_VOICES,
+  type GuitarVoice,
+  pluck,
+  previewGuitar,
+  setGuitarVoice,
+  silenceGuitar,
+  strum,
+  unlockGuitar,
+  useGuitarVoice,
+} from './pluck';
 import {
   CHORDS,
   CHORD_SONGS,
   GSTRINGS,
   GUITAR_SONGS,
+  chordMatch,
   chordMidis,
+  chordOfTag,
   guitarNotes,
   isChordSong,
   type ChordShape,
@@ -20,28 +38,38 @@ import {
 } from './theory';
 
 // The guitar tab: songs (single notes) and chords, played on the touch
-// guitar. It is made to be held against your chest facing a mirror, so the
-// play screen is drawn back to front and reads right in the mirror.
+// guitar or on a real guitar (the microphone listens). The touch guitar is
+// made to be held against your chest facing a mirror, so its play screen is
+// drawn back to front and reads right in the mirror.
 
-type View = 'songs' | 'chords' | 'settings';
+type View = 'songs' | 'chords' | 'sounds' | 'settings';
+type On = 'touch' | 'real';
 
 const OPTS_KEY = 'kf.gt.opts';
+const ON_KEY = 'kf.gt.on';
 interface GuitarOpts {
   mirror: boolean;
-  easyPluck: boolean;
+  size: string;
+  /** a tap anywhere on the body picks the string your finger is on */
+  easyPick: boolean;
   easyChords: boolean;
   names: boolean;
   tipSeen: boolean;
 }
 function loadOpts(): GuitarOpts {
-  const def: GuitarOpts = { mirror: true, easyPluck: true, easyChords: false, names: true, tipSeen: false };
+  const def: GuitarOpts = { mirror: true, size: 'Full', easyPick: true, easyChords: false, names: false, tipSeen: false };
   try {
     return { ...def, ...JSON.parse(localStorage.getItem(OPTS_KEY) || '{}') };
   } catch {
     return def;
   }
 }
-function useOpts() {
+type SetOpts = React.Dispatch<React.SetStateAction<GuitarOpts>>;
+
+export function GuitarTab() {
+  const [view, setView] = useState<View>('songs');
+  const [song, setSong] = useState<Song | null | 'free'>(null);
+  const [tip, setTip] = useState(false);
   const [opts, setOpts] = useState<GuitarOpts>(loadOpts);
   useEffect(() => {
     try {
@@ -50,32 +78,47 @@ function useOpts() {
       /* ignore */
     }
   }, [opts]);
-  return [opts, setOpts] as const;
-}
-
-export function GuitarTab() {
-  const [view, setView] = useState<View>('songs');
-  const [song, setSong] = useState<Song | null | 'free'>(null);
-  const [tip, setTip] = useState(false);
-  const [opts, setOpts] = useOpts();
+  const [on, setOnState] = useState<On>(() => {
+    try {
+      return localStorage.getItem(ON_KEY) === 'real' ? 'real' : 'touch';
+    } catch {
+      return 'touch';
+    }
+  });
+  const setOn = (v: On) => {
+    setOnState(v);
+    try {
+      localStorage.setItem(ON_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
   const pick = (v: View) => {
     setView(v);
     setSong(null);
   };
+  const exit = () => setSong(null);
   const play =
     song === 'free' ? (
-      <GuitarPlay song={null} onExit={() => setSong(null)} opts={opts} setOpts={setOpts} />
+      <GuitarPlay song={null} input="touch" onExit={exit} opts={opts} setOpts={setOpts} />
     ) : song ? (
-      <GuitarPlay key={song.id} song={song} onExit={() => setSong(null)} opts={opts} setOpts={setOpts} />
+      <GuitarPlay key={song.id + on} song={song} input={on} onExit={exit} opts={opts} setOpts={setOpts} />
     ) : null;
-  const banner = (
+  const header = (
     <>
-      <div className="banner gt-banner">
-        <span>🪞 Works best sitting in front of a mirror, holding the iPad against your chest like a guitar, screen facing the mirror.</span>
-        <button className="btn small ghost" onClick={() => setTip(true)}>
-          <Icon name="help" size={16} /> How
-        </button>
-      </div>
+      <PlayOn value={on} onChange={setOn} real="My guitar" />
+      {on === 'touch' ? (
+        <div className="banner gt-banner">
+          <span>🪞 Works best sitting in front of a mirror, holding the iPad against your chest like a guitar, screen facing the mirror.</span>
+          <button className="btn small ghost" onClick={() => setTip(true)}>
+            <Icon name="help" size={16} /> How
+          </button>
+        </div>
+      ) : (
+        <div className="banner gt-banner">
+          <span>🎤 Prop the iPad up where you can see it and play your guitar. I listen and wait for each note.</span>
+        </div>
+      )}
       {tip && <MirrorTip onDone={() => setTip(false)} />}
     </>
   );
@@ -83,18 +126,19 @@ export function GuitarTab() {
     <div className="tab-body">
       <TopBarSlot>
         <nav className="subnav">
-          <button className={view === 'songs' ? 'on' : ''} onClick={() => pick('songs')}>
-            <Icon name="songs" className="ico" />
-            <span className="nm">Songs</span>
-          </button>
-          <button className={view === 'chords' ? 'on' : ''} onClick={() => pick('chords')}>
-            <Icon name="chords" className="ico" />
-            <span className="nm">Chords</span>
-          </button>
-          <button className={view === 'settings' ? 'on' : ''} onClick={() => pick('settings')}>
-            <Icon name="settings" className="ico" />
-            <span className="nm">Settings</span>
-          </button>
+          {(
+            [
+              ['songs', 'songs', 'Songs'],
+              ['chords', 'chords', 'Chords'],
+              ['sounds', 'sounds', 'Sounds'],
+              ['settings', 'settings', 'Settings'],
+            ] as const
+          ).map(([v, ic, nm]) => (
+            <button key={v} className={view === v ? 'on' : ''} onClick={() => pick(v)}>
+              <Icon name={ic} className="ico" />
+              <span className="nm">{nm}</span>
+            </button>
+          ))}
         </nav>
       </TopBarSlot>
       {play}
@@ -104,14 +148,16 @@ export function GuitarTab() {
           onPick={setSong}
           intro={
             <>
-              {banner}
-              <div className="song-grid">
-                <button className="song-card" onClick={() => setSong('free')}>
-                  <span className="song-emoji">🎸</span>
-                  <b>Free play</b>
-                  <span className="muted small">Just play! Every string, frets 1 to 5.</span>
-                </button>
-              </div>
+              {header}
+              {on === 'touch' && (
+                <div className="song-grid">
+                  <button className="song-card" onClick={() => setSong('free')}>
+                    <span className="song-emoji">🎸</span>
+                    <b>Free play</b>
+                    <span className="muted small">Just play! Every string, frets 1 to 5.</span>
+                  </button>
+                </div>
+              )}
             </>
           }
         />
@@ -122,10 +168,10 @@ export function GuitarTab() {
           onPick={setSong}
           intro={
             <>
-              {banner}
+              {header}
               <p className="muted gt-chord-intro">
                 🌱 Learn one chord at a time · 🌿 switch between chords · 🌳 strum along to whole songs. Put your fingers
-                on the dots, then strum down across the round hole.
+                on the dots, then strum the way the arrow points.
               </p>
               <div className="gt-chord-chart">
                 {Object.values(CHORDS).map((c) => (
@@ -136,10 +182,12 @@ export function GuitarTab() {
           }
         />
       )}
+      {!play && view === 'sounds' && <GuitarSounds />}
       {!play && view === 'settings' && (
         <div className="settings-page">
           <div className="panel slim settings-list">
             <b>Touch guitar</b>
+            <SizeRow opts={opts} setOpts={setOpts} />
             <GuitarToggles opts={opts} setOpts={setOpts} />
             <div className="opt-row">
               <span>
@@ -151,6 +199,16 @@ export function GuitarTab() {
               </button>
             </div>
           </div>
+          <div className="panel slim settings-list">
+            <b>Microphone (my guitar)</b>
+            <div className="opt-row">
+              <span>
+                Mic boost
+                <span className="muted small tv-hint">Turn up if I can't hear a quiet guitar</span>
+              </span>
+              <MicBoostSelect bare />
+            </div>
+          </div>
           {tip && <MirrorTip onDone={() => setTip(false)} />}
         </div>
       )}
@@ -158,7 +216,70 @@ export function GuitarTab() {
   );
 }
 
-function GuitarToggles({ opts, setOpts, inGame }: { opts: GuitarOpts; setOpts: React.Dispatch<React.SetStateAction<GuitarOpts>>; inGame?: boolean }) {
+/** Pick the guitar's sound, or record your own (the guitar's Sounds tab). */
+function GuitarSounds() {
+  const voice = useGuitarVoice();
+  return (
+    <div className="lesson">
+      <SoundLab
+        keys={false}
+        title="Pick how your guitar sounds"
+        builtIns={GUITAR_VOICES}
+        value={voice}
+        fallback="acoustic"
+        onSelect={(id) => setGuitarVoice(id as GuitarVoice)}
+        onPreview={(id) => previewGuitar(id as GuitarVoice)}
+        recordHint="Tap the red button, then meow, sing, say hello or make any noise! Every string you pick plays it, at the note you finger."
+      />
+    </div>
+  );
+}
+
+function VoiceSelect() {
+  const voice = useGuitarVoice();
+  const mine = useMySounds();
+  return (
+    <select
+      value={voice}
+      aria-label="guitar sound"
+      onChange={(e) => {
+        setGuitarVoice(e.target.value as GuitarVoice);
+        previewGuitar();
+      }}
+    >
+      {GUITAR_VOICES.map((v) => (
+        <option key={v.id} value={v.id}>
+          {v.emoji} {v.name}
+        </option>
+      ))}
+      {mine.map((m) => (
+        <option key={m.id} value={`mine:${m.id}`}>
+          {m.emoji} {m.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function SizeRow({ opts, setOpts }: { opts: GuitarOpts; setOpts: SetOpts }) {
+  return (
+    <div className="opt-row">
+      <span>
+        Guitar size
+        <span className="muted small tv-hint">Smaller guitars have closer frets, for smaller hands</span>
+      </span>
+      <div className="seg">
+        {GUITAR_SIZES.map(([name]) => (
+          <button key={name} className={opts.size === name ? 'on' : ''} onClick={() => setOpts((o) => ({ ...o, size: name }))}>
+            {name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GuitarToggles({ opts, setOpts }: { opts: GuitarOpts; setOpts: SetOpts }) {
   const set = (o: Partial<GuitarOpts>) => setOpts((cur) => ({ ...cur, ...o }));
   return (
     <>
@@ -168,9 +289,14 @@ function GuitarToggles({ opts, setOpts, inGame }: { opts: GuitarOpts; setOpts: R
         on={opts.mirror}
         set={(v) => set({ mirror: v })}
       />
-      <Toggle label="Easy pluck" hint="Pressing a fret plays the note, no strum needed" on={opts.easyPluck} set={(v) => set({ easyPluck: v })} />
+      <Toggle
+        label="Easy picking"
+        hint="Tap anywhere on the guitar body to pick the string your finger is on"
+        on={opts.easyPick}
+        set={(v) => set({ easyPick: v })}
+      />
       <Toggle label="Easy chords" hint="Any strum plays the right chord" on={opts.easyChords} set={(v) => set({ easyChords: v })} />
-      <Toggle label="Note names" hint={inGame ? undefined : 'Show note names on the frets'} on={opts.names} set={(v) => set({ names: v })} />
+      <Toggle label="Note names" hint="Show note names on the frets" on={opts.names} set={(v) => set({ names: v })} />
     </>
   );
 }
@@ -223,21 +349,29 @@ type Mode = 'wait' | 'demo';
 interface NoteSt extends GuitarNote {
   state: 'pending' | 'hit';
   chord: ChordShape | null;
+  up: boolean;
 }
 
 function GuitarPlay({
   song,
+  input,
   onExit,
   opts,
   setOpts,
 }: {
   song: Song | null;
+  input: On;
   onExit: () => void;
   opts: GuitarOpts;
-  setOpts: React.Dispatch<React.SetStateAction<GuitarOpts>>;
+  setOpts: SetOpts;
 }) {
   usePlayingMode(true);
   const gs = useMemo(() => new GuitarState(), []);
+  // for automated checks in development
+  if (import.meta.env.DEV) (window as unknown as { __guitar: GuitarState }).__guitar = gs;
+  const real = input === 'real';
+  const mirrored = opts.mirror && !real;
+  const micStatus = useMicStatus();
   const [showOpts, setShowOpts] = useState(false);
   const [mode, setMode] = useState<Mode>('wait');
   const [running, setRunning] = useState(false);
@@ -254,11 +388,17 @@ function GuitarPlay({
     songBeat: -3,
     hits: 0,
     misses: 0,
+    dirRight: 0,
     demoIdx: -1,
     demo: null as NoteSt | null,
-    strums: new Map<number, Set<number>>(),
+    strums: new Map<number, { strings: Set<number>; down: boolean }>(),
     judged: new Set<number>(),
-    wrongAt: 0,
+    hintAt: 0,
+    // microphone (real guitar)
+    match: 0,
+    lastHit: { t: 0, midi: -1 },
+    onsetAt: 0,
+    listen: null as null | { t0: number; acc: Float32Array },
   });
 
   const reset = () => {
@@ -266,17 +406,19 @@ function GuitarPlay({
     if (!song) st.notes = [];
     else if (chordMode)
       st.notes = song.notes.map((n) => {
-        const c = CHORDS[n.tag ?? ''] ?? null;
-        const s = c ? c.frets.findIndex((f) => f >= 0) : 0;
-        return { midi: n.midi ?? 40, beat: n.beat, beats: n.beats, fing: { string: s, fret: 0, finger: 0, label: '' }, state: 'pending', chord: c };
+        const { chord, up } = chordOfTag(n.tag);
+        const s = chord ? chord.frets.findIndex((f) => f >= 0) : 0;
+        return { midi: n.midi ?? 40, beat: n.beat, beats: n.beats, fing: { string: s, fret: 0, finger: 0, label: '' }, state: 'pending', chord, up };
       });
-    else st.notes = guitarNotes(song).map((n) => ({ ...n, state: 'pending', chord: null }));
+    else st.notes = guitarNotes(song).map((n) => ({ ...n, state: 'pending', chord: null, up: false }));
     st.songBeat = -3;
-    st.hits = st.misses = 0;
+    st.hits = st.misses = st.dirRight = 0;
     st.demoIdx = -1;
     st.demo = null;
     st.strums.clear();
     st.judged.clear();
+    st.listen = null;
+    st.match = 0;
     setDone(false);
     silenceGuitar();
     gs.clear();
@@ -294,9 +436,15 @@ function GuitarPlay({
 
   const canvasRef = useAnimationCanvas((ctx, w, h, now, dt) => {
     const st = g.current;
-    if (gs.L.w !== w || gs.L.h !== h) gs.L = guitarLayout(w, h);
+    const key = `${w}x${h}${opts.size}`;
+    if (layoutKey.current !== key) {
+      gs.L = guitarLayout(w, h, screenPxPerMm(), opts.size, window.innerHeight / 5);
+      layoutKey.current = key;
+    }
     const cur = pending();
-    gs.easyPluck = opts.easyPluck && !chordMode;
+    gs.easyPick = opts.easyPick;
+    gs.locked = real || demoing;
+    gs.targetString = song && !chordMode && cur && mode === 'wait' ? cur.fing.string : null;
     gs.forceChord = chordMode && opts.easyChords && cur?.chord && mode === 'wait' ? cur.chord : null;
 
     let waiting = false;
@@ -313,29 +461,31 @@ function GuitarPlay({
         setDone(true);
       }
     }
-    if (song && running && mode === 'wait') score(now);
+    if (song && running && mode === 'wait' && !real) score();
     gs.events = [];
 
     const p = pending();
-    const showDemo = mode === 'demo' ? st.demo : null;
-    const tgt = song && !done ? (showDemo ?? (mode === 'wait' ? p : null)) : null;
+    const tgt = song && !done ? (mode === 'demo' ? st.demo : p) : null;
+    const fall = (n: NoteSt): FallingChord => ({ beat: n.beat, beats: n.beats, chord: n.chord, up: n.up, state: n.state });
     drawGuitar(
       ctx,
       gs,
       {
         notes: song && !chordMode ? st.notes : null,
-        chords: chordMode ? st.notes.map((n) => ({ beat: n.beat, beats: n.beats, tag: n.chord?.name, state: n.state })) : null,
+        chords: chordMode ? st.notes.map(fall) : null,
         songBeat: st.songBeat,
         visibleBeats: 4 / Math.max(0.5, speed),
         current: tgt && !chordMode ? tgt : null,
-        currentChord: tgt && chordMode ? tgt.chord : null,
+        currentChord: tgt && chordMode ? fall(tgt) : null,
         waiting,
         names: opts.names,
-        demo: mode === 'demo',
+        ghost: mode === 'demo' || real,
+        listening: real && running && mode === 'wait' && micStatus === 'running',
       },
       now,
     );
   });
+  const layoutKey = useRef('');
 
   function runDemo(now: number) {
     const st = g.current;
@@ -345,7 +495,7 @@ function GuitarPlay({
         n.state = 'hit';
         st.demo = n;
         if (n.chord) {
-          strum(chordMidis(n.chord), 0.75);
+          strum(chordMidis(n.chord), 0.75, !n.up);
           n.chord.frets.forEach((f, s) => f >= 0 && (gs.shake[s] = now));
         } else {
           pluck(n.fing.string, n.midi, 0.8);
@@ -361,48 +511,114 @@ function GuitarPlay({
     p.state = 'hit';
     st.hits++;
     if (st.songBeat < p.beat) st.songBeat = Math.max(st.songBeat, p.beat - 0.1);
-    if (st.hits % 5 === 0) say(['Rock on! 🎸', 'Nice! ✨', 'Keep going! 🔥', 'You sound great! 🌟'][(st.hits / 5) % 4]);
+    if (st.hits % 5 !== 0) setFeedback(null);
+    else say(['Rock on! 🎸', 'Nice! ✨', 'Keep going! 🔥', 'You sound great! 🌟'][(st.hits / 5) % 4]);
   }
+  function hint(text: string, now = performance.now()) {
+    const st = g.current;
+    if (now - st.hintAt < 2500) return;
+    st.hintAt = now;
+    say(text, 'info');
+  }
+  const fretHint = (p: NoteSt) =>
+    p.fing.fret === 0
+      ? `Pick the open ${GSTRINGS[p.fing.string].name} string 👉`
+      : `Finger ${p.fing.finger} on fret ${p.fing.fret} of the ${GSTRINGS[p.fing.string].name} string, then pick 👉`;
 
-  function score(now: number) {
+  /** touch guitar: judge the picks and strums since the last frame */
+  function score() {
     const st = g.current;
     for (const ev of gs.events) {
       const p = pending();
       if (!p || p.beat > st.songBeat + 1) return;
       if (p.chord) {
-        const set = st.strums.get(ev.gesture) ?? new Set<number>();
-        set.add(ev.string);
-        st.strums.set(ev.gesture, set);
+        const sg = st.strums.get(ev.gesture) ?? { strings: new Set<number>(), down: ev.down };
+        sg.strings.add(ev.string);
+        // the swipe's direction (the first string may have been a plain tap)
+        if (sg.strings.size > 1) sg.down = ev.down;
+        st.strums.set(ev.gesture, sg);
         const need = Math.min(3, p.chord.frets.filter((f) => f >= 0).length);
-        if (set.size >= need && !st.judged.has(ev.gesture)) {
+        if (sg.strings.size >= need && !st.judged.has(ev.gesture)) {
           st.judged.add(ev.gesture);
-          if (opts.easyChords || gs.chordHeld(p.chord)) hit(p);
-          else {
+          if (opts.easyChords || gs.chordHeld(p.chord)) {
+            const rightWay = sg.down === !p.up;
+            if (rightWay) st.dirRight++;
+            hit(p);
+            if (!rightWay) say(p.up ? 'That one strums up ↑' : 'That one strums down ↓', 'info');
+          } else {
             st.misses++;
             const wrong = p.chord.frets.findIndex((f, s) => f > 0 && gs.fretOf(s) !== f);
             say(
               wrong >= 0
                 ? `Finger ${p.chord.fingers[wrong]} on the ${GSTRINGS[wrong].name} string, fret ${p.chord.frets[wrong]} 👉`
-                : 'Fingers on the dots, then strum ⬇',
+                : 'Fingers on the dots, then strum',
               'info',
             );
           }
         }
-      } else if (ev.midi === p.midi) hit(p);
-      else {
+      } else if (ev.midi === p.midi) {
+        st.dirRight++;
+        hit(p);
+      } else {
         st.misses++;
-        if (now - st.wrongAt > 2500) {
-          st.wrongAt = now;
-          say(`Try ${p.fing.label} 👉`, 'info');
-        }
+        hint(fretHint(p));
       }
     }
-    // don't let old strums pile up
     if (st.strums.size > 50) {
       st.strums.clear();
       st.judged.clear();
     }
   }
+
+  // real guitar: the microphone
+  usePitchListener(
+    (f) => {
+      const st = g.current;
+      const p = pending();
+      if (f.onset) st.onsetAt = f.t;
+      if (!p || p.beat > st.songBeat + 1) return;
+      if (p.chord) {
+        // a strum: gather the sound for a moment after it starts, then compare
+        if (f.onset && !st.listen && f.rms > 0.01) st.listen = { t0: f.t, acc: new Float32Array(12) };
+        const l = st.listen;
+        if (!l) return;
+        const c = mic.chroma();
+        if (c && f.t - l.t0 > 40) for (let i = 0; i < 12; i++) l.acc[i] += c[i];
+        if (f.t - l.t0 > 380) {
+          st.listen = null;
+          const m = chordMatch(l.acc, p.chord);
+          if (m.share > 0.58 && m.all) {
+            st.dirRight++;
+            hit(p);
+          } else {
+            st.misses++;
+            hint(`Not quite ${p.chord.name} yet. Check your fingers on the dots 👉`, f.t);
+          }
+        }
+        return;
+      }
+      if (!isFinite(f.midi)) {
+        st.match = 0;
+        return;
+      }
+      const off = Math.min(Math.abs(f.midi - p.midi), Math.abs(f.midi - p.midi - 12), Math.abs(f.midi - p.midi + 12));
+      // the same note again needs a fresh pick
+      const fresh = st.onsetAt > st.lastHit.t || Math.round(f.midi) % 12 !== st.lastHit.midi % 12;
+      if (off < 0.5 && fresh) {
+        if (!st.match) st.match = f.t;
+        if (f.t - st.match > 60) {
+          st.match = 0;
+          st.lastHit = { t: f.t, midi: Math.round(f.midi) };
+          st.dirRight++;
+          hit(p);
+        }
+      } else {
+        st.match = 0;
+        if (off >= 0.5 && f.clarity > 0.9 && f.rms > 0.02 && st.onsetAt > st.lastHit.t) hint(fretHint(p), f.t);
+      }
+    },
+    real && running && mode === 'wait',
+  );
 
   // ---------- touches (mirrored on the glass: flip x back) ----------
   useEffect(() => {
@@ -416,14 +632,10 @@ function GuitarPlay({
       el.removeEventListener('touchmove', stop);
     };
   }, [canvasRef]);
-  const local = (cx: number, cy: number, r: DOMRect): [number, number] => [
-    opts.mirror ? r.right - cx : cx - r.left,
-    cy - r.top,
-  ];
+  const local = (cx: number, cy: number, r: DOMRect): [number, number] => [mirrored ? r.right - cx : cx - r.left, cy - r.top];
   const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     unlockGuitar();
-    if (demoing) return;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -433,7 +645,6 @@ function GuitarPlay({
     gs.down(e.pointerId, x, y, performance.now());
   };
   const onMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (demoing) return;
     const r = e.currentTarget.getBoundingClientRect();
     const evs = e.nativeEvent.getCoalescedEvents?.() ?? [];
     for (const c of evs.length > 1 ? evs : [e.nativeEvent]) {
@@ -446,20 +657,22 @@ function GuitarPlay({
   const st = g.current;
   const total = st.notes.length;
   const missRate = total ? st.misses / total : 0;
-  const stars = missRate < 0.2 ? 3 : missRate < 0.6 ? 2 : 1;
+  const dirOk = total ? st.dirRight / total : 1;
+  const stars = missRate < 0.2 && dirOk > 0.8 ? 3 : missRate < 0.6 ? 2 : 1;
   const start = () => {
     unlockGuitar();
+    if (real && mode === 'wait') mic.start().catch(() => undefined);
     if (done || !pending()) reset();
     gs.clear();
     setRunning(true);
   };
   const stop = () => {
     setRunning(false);
-    dampAll();
+    silenceGuitar();
   };
-  const cur = pending();
   const ln = gs.lastNote;
   const playingNow = ln && performance.now() - ln.t < 1500 ? midiName(ln.midi) : null;
+  const micProblem = real && mode === 'wait' && (micStatus === 'denied' || micStatus === 'error');
 
   const bar = (
     <div className="game-bar">
@@ -520,17 +733,32 @@ function GuitarPlay({
         <Icon name="settings" />
         <span className="lbl"> Options</span>
       </button>
-      <button className="btn small ghost" onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))} aria-label="How to hold it">
-        <Icon name="help" />
-        <span className="lbl"> Help</span>
-      </button>
+      {!real && (
+        <button className="btn small ghost" onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))} aria-label="How to hold it">
+          <Icon name="help" />
+          <span className="lbl"> Help</span>
+        </button>
+      )}
       <FullscreenButton />
     </div>
   );
 
+  const startText =
+    mode === 'demo'
+      ? 'Watch the dots and hear how it goes.'
+      : real
+        ? chordMode
+          ? 'Each chord waits for you. Make the chord on your guitar and strum. I listen.'
+          : 'Each note waits for you. Play it on your guitar: finger on the dot, then pick. I listen.'
+        : chordMode
+          ? 'Each chord waits for you. Fingers on the dots, then strum across the guitar body the way the arrow points.'
+          : opts.easyPick
+            ? 'Each note waits for you. Press the glowing dot, then tap the guitar body to pick that string.'
+            : 'Each note waits for you. Press the glowing dot, then pick that string on the guitar body.';
+
   return (
     <div className="lesson gt-play touch-violin">
-      <div className={`gt-frame ${opts.mirror ? 'gt-mirror' : ''}`}>
+      <div className={`gt-frame ${mirrored ? 'gt-mirror' : ''}`}>
         {bar}
         <div className="tv-surface gt-surface">
           <canvas
@@ -547,18 +775,20 @@ function GuitarPlay({
               <div className="tv-turn">
                 <button className="btn big primary" onClick={start}>
                   <Icon name={mode === 'demo' ? 'listen' : 'play'} size={22} />{' '}
-                  {st.songBeat > -3 ? 'Keep going' : mode === 'demo' ? 'Listen to it' : 'Start'}
+                  {st.songBeat > -3 ? 'Keep going' : mode === 'demo' ? 'Listen to it' : real ? 'Start listening' : 'Start'}
                 </button>
-                <p className="muted small">
-                  {mode === 'demo'
-                    ? 'Watch the dots and hear how it goes.'
-                    : chordMode
-                      ? 'Each chord waits for you. Put your fingers on the dots, then strum down across the round hole.'
-                      : opts.easyPluck
-                        ? 'Each note waits for you. Press the glowing dot (or pluck the open string by its name).'
-                        : 'Each note waits for you. Press the glowing dot, then pluck that string in the round hole.'}
-                </p>
-                {opts.mirror && <p className="muted small">🪞 Back to front on purpose: it reads right in the mirror.</p>}
+                <p className="muted small">{startText}</p>
+                {mirrored && <p className="muted small">🪞 Back to front on purpose: it reads right in the mirror.</p>}
+              </div>
+            </div>
+          )}
+          {micProblem && (
+            <div className="overlay-center gt-over">
+              <div className="tv-turn">
+                <p>{micStatus === 'denied' ? 'The microphone is blocked. On iPad: Settings › Safari › Microphone › Allow, then reload.' : mic.error}</p>
+                <button className="btn big primary" onClick={() => mic.start().catch(() => undefined)}>
+                  🎤 Turn on microphone
+                </button>
               </div>
             </div>
           )}
@@ -575,6 +805,7 @@ function GuitarPlay({
                     <p>
                       All {total} {chordMode ? 'chords' : 'notes'} played
                       {st.misses ? ` · ${st.misses} tries that missed` : ' · no misses'}
+                      {chordMode && !real ? ` · strum direction right ${st.dirRight}/${total}` : ''}
                     </p>
                   </>
                 ) : (
@@ -609,18 +840,16 @@ function GuitarPlay({
               </div>
             </div>
           )}
-          {cur && running && mode === 'wait' && chordMode && cur.chord && (
-            <div className="gt-now" style={{ color: cur.chord.color }}>
-              {cur.chord.name}
-              <span className="muted small"> {cur.chord.tip}</span>
-            </div>
-          )}
         </div>
       </div>
       {showOpts &&
         createPortal(
           <div className="tv-opts-layer" onClick={(e) => e.target === e.currentTarget && setShowOpts(false)}>
             <div className="opts-pop tv-opts-float" style={{ transform: 'translate(-50%, -50%)' }} role="dialog" aria-label="Guitar options">
+              <div className="opt-row">
+                <span>Sound</span>
+                <VoiceSelect />
+              </div>
               {song && (
                 <div className="opt-row">
                   <span>Speed</span>
@@ -633,7 +862,20 @@ function GuitarPlay({
                   </div>
                 </div>
               )}
-              <GuitarToggles opts={opts} setOpts={setOpts} inGame />
+              {real ? (
+                <>
+                  <div className="opt-row">
+                    <span>Mic boost</span>
+                    <MicBoostSelect bare />
+                  </div>
+                  <Toggle label="Note names" on={opts.names} set={(v) => setOpts((o) => ({ ...o, names: v }))} />
+                </>
+              ) : (
+                <>
+                  <SizeRow opts={opts} setOpts={setOpts} />
+                  <GuitarToggles opts={opts} setOpts={setOpts} />
+                </>
+              )}
               <button className="btn small primary tv-opts-done" onClick={() => setShowOpts(false)}>
                 Done
               </button>
@@ -641,7 +883,7 @@ function GuitarPlay({
           </div>,
           document.body,
         )}
-      {!opts.tipSeen && <MirrorTip onDone={() => setOpts((o) => ({ ...o, tipSeen: true }))} />}
+      {!real && !opts.tipSeen && <MirrorTip onDone={() => setOpts((o) => ({ ...o, tipSeen: true }))} />}
     </div>
   );
 }
@@ -660,8 +902,13 @@ export function MirrorTip({ onDone }: { onDone: () => void }) {
             <b>Sit on a chair facing a mirror.</b>
           </li>
           <li>
-            <b>Hold the iPad sideways against your chest like a guitar,</b> with the screen facing the mirror. Your left hand
-            reaches round to the frets on the neck, your right hand strums over the round hole.
+            <b>Hold the iPad sideways against your chest like a guitar,</b> with the screen facing the mirror. The neck runs
+            along the bottom edge: your left fingers curl up from underneath onto the frets, your right hand picks and strums
+            on the guitar body at the other end.
+          </li>
+          <li>
+            <b>Press, then pick.</b> Pressing a fret makes no sound on its own, just like a real guitar. Pick or strum on
+            the body the way the arrow points.
           </li>
           <li>
             <b>Watch the mirror, not the screen.</b> Everything is drawn back to front on purpose, so in the mirror the
@@ -680,24 +927,18 @@ export function MirrorTip({ onDone }: { onDone: () => void }) {
 function MirrorGraphic() {
   return (
     <svg viewBox="0 0 360 170" className="tv-tip-art" role="img" aria-label="Sit facing a mirror with the iPad against your chest, screen toward the mirror">
-      {/* mirror */}
       <rect x={250} y={10} width={90} height={150} rx={8} fill="#2b2064" stroke="#b9b0e0" strokeWidth={3} />
       <path d="M262 30 l22 -14 M262 52 l40 -26" stroke="rgba(255,255,255,0.35)" strokeWidth={3} strokeLinecap="round" />
       <text x={295} y={152} textAnchor="middle" fontSize={13} fontWeight={800} fill="#b9b0e0">
         mirror
       </text>
-      {/* chair */}
       <path d="M40 150 v-60 M40 112 h56 v38" stroke="#8a5a2b" strokeWidth={6} strokeLinecap="round" fill="none" />
-      {/* person, side view, facing right */}
       <circle cx={70} cy={40} r={16} fill="#f2c9a0" />
       <path d="M66 58 L62 108 L110 108 L112 150" stroke="#7b6cff" strokeWidth={14} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      {/* iPad against the chest, screen toward the mirror */}
       <rect x={82} y={66} width={9} height={52} rx={3} fill="#0e0a24" stroke="#f6f3ff" strokeWidth={2} />
       <rect x={91} y={70} width={3} height={44} fill="#ffcf33" />
-      {/* arms */}
       <path d="M66 66 Q86 84 92 78" stroke="#f2c9a0" strokeWidth={7} strokeLinecap="round" fill="none" />
       <path d="M68 74 Q84 104 94 104" stroke="#f2c9a0" strokeWidth={7} strokeLinecap="round" fill="none" />
-      {/* line of sight */}
       <path d="M86 38 L248 60" stroke="#ffcf33" strokeWidth={2} strokeDasharray="5 5" />
       <path d="M100 92 L248 92" stroke="#52d273" strokeWidth={2} strokeDasharray="5 5" />
       <path d="M240 86 l8 6 l-8 6" stroke="#52d273" strokeWidth={2} fill="none" />
