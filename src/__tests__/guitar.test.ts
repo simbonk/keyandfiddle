@@ -25,7 +25,7 @@ describe('guitar fingering', () => {
   });
   it('every song note lands on frets 0-5', () => {
     for (const s of GUITAR_SONGS) {
-      const melody = s.notes.filter((n) => n.midi !== null && !n.tag?.includes('L'));
+      const melody = s.notes.filter((n) => n.midi !== null && !n.tag?.includes('L') && !chordOfTag(n.tag).chord);
       const g = guitarNotes(s);
       expect(g.length, s.title).toBe(melody.length);
       for (const n of g) expect(n.fing.fret).toBeLessThanOrEqual(5);
@@ -59,5 +59,18 @@ describe('hearing chords', () => {
     expect(chordMatch(chromaOf(chordMidis(CHORDS.C)), CHORDS.Am).all).toBe(false);
     const em = chordMatch(chromaOf(chordMidis(CHORDS.E)), CHORDS.Em);
     expect(em.share < 0.7 || !em.all).toBe(true);
+  });
+});
+
+describe('songs with chords', () => {
+  it('mix picked notes and strums', async () => {
+    const { hasChords } = await import('../guitar/theory');
+    const mixed = GUITAR_SONGS.filter(hasChords);
+    expect(mixed.length).toBeGreaterThanOrEqual(5);
+    for (const s of mixed) {
+      const strums = s.notes.filter((n) => chordOfTag(n.tag).chord).length;
+      expect(strums, s.title).toBeGreaterThan(1);
+      expect(guitarNotes(s).length, s.title).toBeGreaterThan(strums);
+    }
   });
 });

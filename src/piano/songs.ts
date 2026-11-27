@@ -152,7 +152,7 @@ export const JB_CHORUS = `E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:
   F5:1 F5:1 F5:1.5 F5:0.5 | F5:1 E5:1 E5:1 E5:0.5 E5:0.5 | E5:1 D5:1 D5:1 E5:1 | D5:2 G5:2 |
   E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:0.5 | E5:4:f |
   F5:1 F5:1 F5:1 F5:1 | F5:1 E5:1 E5:1 E5:0.5 E5:0.5 | G5:1 G5:1 F5:1 D5:1 | C5:4:f |`;
-const JB_CHORUS_C = 'C | C | C | C | F | C | D G | G | C | C | C | C | F | C | G | C';
+export const JB_CHORUS_C = 'C | C | C | C | F | C | D G | G | C | C | C | C | F | C | G | C';
 
 export const GS_A = `A4:1 |
   C5:2 D5:1 | E5:1.5 F5:0.5 E5:1 | D5:2 B4:1 | G4:1.5 A4:0.5 B4:1 | C5:2 A4:1 | A4:1.5 G#4:0.5 A4:1 | B4:2 G#4:1 | E4:2 A4:1 |
@@ -168,7 +168,7 @@ export const ODE = `E4:1:p E4:1:p F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4
   E4:1 E4:1 F4:1 G4:1 | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | D4:1.5 C4:0.5 C4:2 |
   D4:1 D4:1 E4:1 C4:1 | D4:1 E4:0.5 F4:0.5 E4:1 C4:1 | D4:1 E4:0.5 F4:0.5 E4:1 D4:1 | C4:1 D4:1 G3:2 |
   E4:1:f E4:1:f F4:1:f G4:1:f | G4:1 F4:1 E4:1 D4:1 | C4:1 C4:1 D4:1 E4:1 | D4:1.5 C4:0.5 C4:2`;
-const ODE_CHORDS = `C | G | C | G | C | G | C | G C | G | G C | G C | G | C | G | C | G C`;
+export const ODE_CHORDS = `C | G | C | G | C | G | C | G C | G | G C | G C | G | C | G | C | G C`;
 
 export const CANON_VARS = [
       'F#5:2:p E5:2:p D5:2:p C#5:2:p B4:2 A4:2 B4:2 C#5:2',

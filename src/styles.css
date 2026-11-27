@@ -3053,3 +3053,41 @@ select option {
 .gt-play.gt-turned {
   padding: 4px 8px 4px;
 }
+
+/* guitar start and end cards: drawn straight (not mirrored), turned with the guitar */
+.gt-card-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  /* the play bar (Wait / Listen, Options) stays usable around the card */
+  pointer-events: none;
+}
+.gt-card {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, 86vw, 86vh);
+  text-align: center;
+}
+.gt-card-title {
+  margin: 0;
+}
+.gt-how {
+  text-align: left;
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+.gt-card .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
