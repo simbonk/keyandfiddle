@@ -41,14 +41,20 @@ export interface GuitarLayout {
   spacing: number;
 }
 
+/** Real necks are tuned for curled fingertips; on flat glass chord shapes are
+ * a stretch, so the strings sit closer together and the frets a bit shorter. */
+export const NECK_SQUEEZE = 0.78;
+export const FRET_SQUEEZE = 0.72;
+
 /**
  * @param maxNeck the most the neck may take across the strings, in px (a fifth of the screen)
  * @param mm CSS px per mm of this screen
  */
 export function guitarLayout(w: number, h: number, mm: number, size = 'Full', maxNeck = h / 5): GuitarLayout {
   const [, scale, nut] = GUITAR_SIZES.find((z) => z[0] === size) ?? GUITAR_SIZES[0];
-  // across the strings: real size, but never more than a fifth of the screen
-  const neckH = Math.max(60, Math.min(nut * mm + 8, maxNeck, h * 0.35));
+  // across the strings: a little narrower than a real neck (fingers on glass
+  // can't curl round the strings), and never more than a fifth of the screen
+  const neckH = Math.max(60, Math.min(nut * NECK_SQUEEZE * mm + 8, maxNeck * 0.85, h * 0.35));
   const gBot = h - 2;
   const gTop = gBot - neckH;
   const nutX = Math.round(Math.max(48, Math.min(72, 14 * mm)));
@@ -56,7 +62,7 @@ export function guitarLayout(w: number, h: number, mm: number, size = 'Full', ma
   // leave room to strum
   const minBody = Math.max(130, w * 0.18);
   const realLen = scale * (1 - 2 ** (-(FRETS + 0.35) / 12)) * mm;
-  const k = Math.min(1, (w - nutX - minBody) / realLen);
+  const k = Math.min(FRET_SQUEEZE, (w - nutX - minBody) / realLen);
   const fretXs = [nutX];
   for (let f = 1; f <= FRETS; f++) fretXs.push(nutX + scale * (1 - 2 ** (-f / 12)) * mm * k);
   const fbEnd = Math.round(nutX + realLen * k);
@@ -218,9 +224,73 @@ export class GuitarState {
     this.events = [];
   }
 
-  /** Are the fingers on this chord's dots? */
+  /**
+   * Which of a chord's dots have a finger near them. Forgiving: a touch one
+   * string or one fret away still counts (no frets to feel on glass), but each
+   * finger of the chord needs its own touch. A barre finger (same number on
+   * several strings) is one finger.
+   */
+  chordDots(c: ChordShape): boolean[] {
+    const frets = [...this.touches.values()].filter((t): t is Extract<Touch, { kind: 'fret' }> => t.kind === 'fret');
+    const groups = new Map<number, number[]>();
+    c.frets.forEach((f, s) => {
+      if (f <= 0) return;
+      const k = c.fingers[s] || 10 + s;
+      groups.set(k, [...(groups.get(k) ?? []), s]);
+    });
+    const fingers = [...groups.values()];
+    const near = (t: { string: number; fret: number }, s: number) =>
+      Math.abs(t.string - s) <= 1 && Math.abs(t.fret - c.frets[s]) <= 1;
+    const score = (t: { string: number; fret: number }, s: number) => Math.abs(t.string - s) + Math.abs(t.fret - c.frets[s]);
+    // best matching of touches to fingers (at most 4 fingers, so try them all)
+    let best: (number | null)[] = fingers.map(() => null);
+    let bestN = -1;
+    let bestCost = Infinity;
+    const pick: (number | null)[] = [];
+    const used = new Set<number>();
+    const go = (i: number, n: number, cost: number) => {
+      if (i === fingers.length) {
+        if (n > bestN || (n === bestN && cost < bestCost)) {
+          bestN = n;
+          bestCost = cost;
+          best = [...pick];
+        }
+        return;
+      }
+      pick[i] = null;
+      go(i + 1, n, cost);
+      frets.forEach((t, ti) => {
+        if (used.has(ti)) return;
+        const ss = fingers[i].filter((s) => near(t, s));
+        if (!ss.length) return;
+        used.add(ti);
+        pick[i] = ti;
+        go(i + 1, n + 1, cost + Math.min(...ss.map((s) => score(t, s))));
+        used.delete(ti);
+      });
+      pick[i] = null;
+    };
+    go(0, 0, 0);
+    const ok = c.frets.map(() => false);
+    fingers.forEach((ss, i) => {
+      if (best[i] !== null) for (const s of ss) ok[s] = true;
+    });
+    return ok;
+  }
+
+  /** Are the fingers (roughly) on this chord's dots? With 3 or more fingers, one may miss. */
   chordHeld(c: ChordShape): boolean {
-    return c.frets.every((f, s) => f <= 0 || this.fretOf(s) === f);
+    const dots = this.chordDots(c);
+    const need = new Set<number>();
+    const got = new Set<number>();
+    c.frets.forEach((f, s) => {
+      if (f <= 0) return;
+      const k = c.fingers[s] || 10 + s;
+      need.add(k);
+      if (dots[s]) got.add(k);
+    });
+    if (!need.size) return true;
+    return got.size >= (need.size >= 3 ? need.size - 1 : need.size);
   }
 }
 
@@ -456,6 +526,7 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
 
   // chord: dots with finger numbers, ✕ over strings to skip, strum arrow on the body
   if (chord) {
+    const dots = d.ghost ? null : gs.chordDots(chord);
     chord.frets.forEach((f, s) => {
       const y = stringY(L, s);
       if (f < 0) {
@@ -468,7 +539,7 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
       }
       if (f === 0) return;
       const x = fretX(L, f) + (L.fretXs[f] - L.fretXs[f - 1]) * 0.22;
-      const ok = d.ghost || held![s] === f;
+      const ok = d.ghost || dots![s];
       const pulse = ok ? 0 : 2 * Math.sin(now / 180);
       circle(ctx, x, y, dotR + 4 + pulse, null, chord.color, 3);
       circle(ctx, x, y, dotR, ok ? chord.color : 'rgba(255,255,255,0.95)');
