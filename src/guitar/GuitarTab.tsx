@@ -10,6 +10,7 @@ import { MicBoostSelect } from '../ui/MicButton';
 import { PlayOn } from '../ui/PlayOn';
 import { SongPicker } from '../ui/SongPicker';
 import { useAnimationCanvas } from '../ui/useAnimationCanvas';
+import { safeBottom, screenSize } from '../ui/viewport';
 import { screenPxPerMm } from '../violin/touch/instrument';
 import { GUITAR_SIZES, GuitarState, drawGuitar, guitarLayout, type FallingChord } from './instrument';
 import {
@@ -55,9 +56,11 @@ interface GuitarOpts {
   easyChords: boolean;
   names: boolean;
   tipSeen: boolean;
+  /** rotation-locked upright iPad: draw the guitar turned the other way round */
+  turnOther: boolean;
 }
 function loadOpts(): GuitarOpts {
-  const def: GuitarOpts = { mirror: true, size: 'Full', easyPick: true, easyChords: false, names: false, tipSeen: false };
+  const def: GuitarOpts = { mirror: true, size: 'Full', easyPick: true, easyChords: false, names: false, tipSeen: false, turnOther: false };
   try {
     return { ...def, ...JSON.parse(localStorage.getItem(OPTS_KEY) || '{}') };
   } catch {
@@ -346,6 +349,10 @@ function ChordBox({ c }: { c: ChordShape }) {
 // ---------------------------------------------------------------------------
 
 type Mode = 'wait' | 'demo';
+/** px kept clear under the status bar (the top of the upright screen) */
+const STATUS_BAR = 32;
+/** px kept clear of the screen's top edge (pull-down gestures) when drawn upside down */
+const EDGE = 16;
 interface NoteSt extends GuitarNote {
   state: 'pending' | 'hit';
   chord: ChordShape | null;
@@ -371,6 +378,62 @@ function GuitarPlay({
   if (import.meta.env.DEV) (window as unknown as { __guitar: GuitarState }).__guitar = gs;
   const real = input === 'real';
   const mirrored = opts.mirror && !real;
+
+  // Held like a guitar with Rotation Lock on, the neck must stay clear of the
+  // swipe-up (home) bar, which iPadOS always draws along the bottom of the
+  // locked screen:
+  // - locked upright (port on top): draw the guitar turned a quarter, neck along
+  //   a long edge, headstock at the home-bar end. Mirrored, the iPad is turned
+  //   the other way, so the turn flips with Mirror.
+  // - locked sideways: draw it upside down, so the neck runs along the screen's
+  //   top edge, opposite the bar; held with the strings at the bottom, the bar
+  //   ends up on top.
+  // "Turn around" swaps the turn if it shows the wrong way up.
+  const [vp, setVp] = useState(screenSize);
+  useEffect(() => {
+    const on = () => setVp(screenSize());
+    window.addEventListener('resize', on);
+    window.addEventListener('orientationchange', on);
+    return () => {
+      window.removeEventListener('resize', on);
+      window.removeEventListener('orientationchange', on);
+    };
+  }, []);
+  const portrait = vp.h > vp.w;
+  const rot: 'none' | 'cw' | 'ccw' | 'flip' = real
+    ? 'none'
+    : portrait
+      ? mirrored !== opts.turnOther
+        ? 'cw'
+        : 'ccw'
+      : opts.turnOther
+        ? 'none'
+        : 'flip';
+  const safeB = safeBottom();
+  const frame: React.CSSProperties =
+    rot === 'none'
+      ? {}
+      : rot === 'flip'
+        ? {
+            // clear of the bar (now on top) and of the status bar's pull-down edge (under the neck)
+            inset: 'auto',
+            top: 0,
+            left: 0,
+            transformOrigin: '0 0',
+            width: vp.w,
+            height: vp.h - safeB - EDGE,
+            transform: `translate(${vp.w}px, ${vp.h - safeB}px) rotate(180deg)`,
+          }
+        : {
+          inset: 'auto',
+          top: 0,
+          left: 0,
+          transformOrigin: '0 0',
+          width: vp.h - STATUS_BAR - safeB,
+          height: vp.w,
+          transform: rot === 'cw' ? `translate(${vp.w}px, ${STATUS_BAR}px) rotate(90deg)` : `translateY(${vp.h - safeB}px) rotate(-90deg)`,
+        };
+
   const micStatus = useMicStatus();
   const [showOpts, setShowOpts] = useState(false);
   const [mode, setMode] = useState<Mode>('wait');
@@ -438,7 +501,7 @@ function GuitarPlay({
     const st = g.current;
     const key = `${w}x${h}${opts.size}`;
     if (layoutKey.current !== key) {
-      gs.L = guitarLayout(w, h, screenPxPerMm(), opts.size, window.innerHeight / 5);
+      gs.L = guitarLayout(w, h, screenPxPerMm(), opts.size, Math.min(window.innerWidth, window.innerHeight) / 5);
       layoutKey.current = key;
     }
     const cur = pending();
@@ -632,7 +695,19 @@ function GuitarPlay({
       el.removeEventListener('touchmove', stop);
     };
   }, [canvasRef]);
-  const local = (cx: number, cy: number, r: DOMRect): [number, number] => [mirrored ? r.right - cx : cx - r.left, cy - r.top];
+  /** screen point -> the guitar's own canvas coordinates (undo the turn, then the mirror) */
+  const local = (cx: number, cy: number, r: DOMRect): [number, number] => {
+    const cw = canvasRef.current?.clientWidth ?? r.width;
+    const [x, y] =
+      rot === 'cw'
+        ? [cy - r.top, r.right - cx]
+        : rot === 'ccw'
+          ? [r.bottom - cy, cx - r.left]
+          : rot === 'flip'
+            ? [r.right - cx, r.bottom - cy]
+            : [cx - r.left, cy - r.top];
+    return [mirrored ? cw - x : x, y];
+  };
   const onDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     unlockGuitar();
@@ -757,7 +832,7 @@ function GuitarPlay({
             : 'Each note waits for you. Press the glowing dot, then pick that string on the guitar body.';
 
   return (
-    <div className="lesson gt-play touch-violin">
+    <div className={`lesson gt-play touch-violin ${rot !== 'none' ? 'gt-turned' : ''}`} style={frame}>
       <div className={`gt-frame ${mirrored ? 'gt-mirror' : ''}`}>
         {bar}
         <div className="tv-surface gt-surface">
@@ -845,7 +920,10 @@ function GuitarPlay({
       {showOpts &&
         createPortal(
           <div className="tv-opts-layer" onClick={(e) => e.target === e.currentTarget && setShowOpts(false)}>
-            <div className="opts-pop tv-opts-float" style={{ transform: 'translate(-50%, -50%)' }} role="dialog" aria-label="Guitar options">
+            <div className="opts-pop tv-opts-float" style={{ transform: `translate(-50%, -50%) rotate(${{ cw: 90, ccw: -90, flip: 180, none: 0 }[rot]}deg)` }}
+              role="dialog"
+              aria-label="Guitar options"
+            >
               <div className="opt-row">
                 <span>Sound</span>
                 <VoiceSelect />
@@ -874,6 +952,14 @@ function GuitarPlay({
                 <>
                   <SizeRow opts={opts} setOpts={setOpts} />
                   <GuitarToggles opts={opts} setOpts={setOpts} />
+                  {(
+                    <Toggle
+                      label="Turn around"
+                      hint="If the guitar shows upside down, turn it the other way"
+                      on={opts.turnOther}
+                      set={(v) => setOpts((o) => ({ ...o, turnOther: v }))}
+                    />
+                  )}
                 </>
               )}
               <button className="btn small primary tv-opts-done" onClick={() => setShowOpts(false)}>
@@ -884,13 +970,27 @@ function GuitarPlay({
           document.body,
         )}
       {!real && !opts.tipSeen && <MirrorTip onDone={() => setOpts((o) => ({ ...o, tipSeen: true }))} />}
+
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-/** How to hold it: sitting, iPad against the chest, screen toward a mirror. */
+const LockSteps = () => (
+  <>
+    <li>
+      <b>Turn on Rotation Lock</b> (swipe down from the top-right corner and tap 🔒), so the screen stops turning. Upright
+      with the charging port on top is best, but any way works.
+    </li>
+    <li>
+      <b>Hold it sideways with the strings along the bottom edge.</b> The guitar is drawn so the swipe-up bar always ends
+      up away from your fingers. Upside down? Turn on <b>Turn around</b> in Options.
+    </li>
+  </>
+);
+
+/** How to hold it: rotation lock, sitting, iPad against the chest, screen toward a mirror. */
 export function MirrorTip({ onDone }: { onDone: () => void }) {
   return (
     <div className="tv-tip-scrim">
@@ -898,21 +998,18 @@ export function MirrorTip({ onDone }: { onDone: () => void }) {
         <h2>🪞 Play it in a mirror</h2>
         <MirrorGraphic />
         <ol className="tv-tip-steps">
+          <LockSteps />
           <li>
-            <b>Sit on a chair facing a mirror.</b>
+            <b>Sit facing a mirror and hold the iPad against your chest like a guitar,</b> screen toward the mirror. Your
+            left fingers curl up from underneath onto the frets; your right hand plays on the guitar body.
           </li>
           <li>
-            <b>Hold the iPad sideways against your chest like a guitar,</b> with the screen facing the mirror. The neck runs
-            along the bottom edge: your left fingers curl up from underneath onto the frets, your right hand picks and strums
-            on the guitar body at the other end.
+            <b>Press, then play.</b> Pressing a fret makes no sound on its own. One glowing string means <b>pluck</b> it;
+            a band across several strings means <b>strum</b> them the way the arrow points.
           </li>
           <li>
-            <b>Press, then pick.</b> Pressing a fret makes no sound on its own, just like a real guitar. Pick or strum on
-            the body the way the arrow points.
-          </li>
-          <li>
-            <b>Watch the mirror, not the screen.</b> Everything is drawn back to front on purpose, so in the mirror the
-            words read the right way and the dots line up with your real fingers.
+            <b>Watch the mirror.</b> Everything is drawn back to front on purpose, so in the mirror the words read the
+            right way and the dots line up with your real fingers.
           </li>
         </ol>
         <p className="muted small">No mirror? Turn off Mirror in Options to play looking straight at the screen.</p>

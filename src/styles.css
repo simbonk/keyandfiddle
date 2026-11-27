@@ -3046,3 +3046,10 @@ select option {
   border-radius: 12px;
   padding: 4px;
 }
+/* sideways iPad without Rotation Lock: keep the strings above the swipe-up bar */
+.gt-play:not(.gt-turned) {
+  padding-bottom: calc(6px + var(--safe-b));
+}
+.gt-play.gt-turned {
+  padding: 4px 8px 4px;
+}

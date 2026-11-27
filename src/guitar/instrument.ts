@@ -470,9 +470,7 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
       text(ctx, String(chord.fingers[s]), x, y + 1, dotR * 1.25, '#1b1440');
     });
     const ss = chord.frets.map((f, s) => (f >= 0 ? s : -1)).filter((s) => s >= 0);
-    const down = !d.currentChord!.up;
-    arrow(ctx, L.w - 30, stringY(L, ss[0]) - 6, stringY(L, ss[ss.length - 1]) + 6, down, chord.color, 6);
-    text(ctx, down ? 'strum ↓' : 'strum ↑', L.w - 30, gTop - 16, 15, chord.color);
+    strumHint(ctx, L, ss, !d.currentChord!.up, chord.color, now);
   }
 
   // single note: the dot to press and the string to pick
@@ -488,11 +486,7 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
       circle(ctx, x, y, dotR, d.ghost || held![s] === f ? col : 'rgba(255,255,255,0.95)');
       text(ctx, String(target.fing.finger), x, y + 1, dotR * 1.25, '#1b1440');
     }
-    // glow the string over the body, with a pick arrow
-    ctx.fillStyle = col + '40';
-    rr(ctx, L.strumX + 4, y - L.spacing * 0.45, L.w - L.strumX - 10, L.spacing * 0.9, 8);
-    ctx.fill();
-    arrow(ctx, L.w - 30, y - Math.max(14, L.spacing * 0.9), y + 4, true, col, 5);
+    pluckHint(ctx, L, s, col, now);
     // label above the neck
     const lbl = f === 0 ? `open ${GSTRINGS[s].name} string` : `${midiName(target.midi)} · finger ${target.fing.finger}, fret ${f}, ${GSTRINGS[s].name} string`;
     ctx.font = `800 16px ${FONT}`;
@@ -503,7 +497,6 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
     rr(ctx, lx - tw / 2, ly - 13, tw, 26, 13);
     ctx.fill();
     text(ctx, lbl, lx, ly + 1, 16, col);
-    text(ctx, 'pick ↓', L.w - 30, gTop - 16, 15, col);
   }
 
   // fingers on the frets
@@ -521,4 +514,82 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
     ctx.globalAlpha = 1;
   }
   if (d.listening) text(ctx, '🎤 listening', hx, L.bodyTop + 18, 15, 'rgba(255,255,255,0.75)', 700);
+}
+
+/** A guitar pick, point down (or up). */
+function pick(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string, down = true) {
+  const k = down ? 1 : -1;
+  ctx.beginPath();
+  ctx.moveTo(x, y + k * r);
+  ctx.quadraticCurveTo(x - r * 0.35, y + k * r * 0.2, x - r * 0.95, y - k * r * 0.45);
+  ctx.quadraticCurveTo(x, y - k * r * 1.05, x + r * 0.95, y - k * r * 0.45);
+  ctx.quadraticCurveTo(x + r * 0.35, y + k * r * 0.2, x, y + k * r);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1b1440';
+  ctx.stroke();
+}
+
+/** Single note: one string glows over the body and a pick flicks across it. */
+function pluckHint(ctx: CanvasRenderingContext2D, L: GuitarLayout, s: number, col: string, now: number) {
+  const y = stringY(L, s);
+  const x0 = L.strumX + 6;
+  const x1 = L.w - 8;
+  ctx.globalAlpha = 0.55 + 0.3 * Math.sin(now / 150);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = Math.max(5, L.spacing * 0.32);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x0, y);
+  ctx.lineTo(x1, y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  // the pick comes down onto the string, flicks through it, and the string rings
+  const px = x1 - Math.min(70, (x1 - x0) * 0.25);
+  const ph = (now % 1100) / 1100;
+  const r = Math.max(10, Math.min(16, L.spacing * 0.6));
+  const py = y - L.spacing * 1.4 + ph * L.spacing * 1.9;
+  ctx.globalAlpha = ph < 0.8 ? 1 : (1 - ph) / 0.2;
+  pick(ctx, px, py, r, '#fff');
+  ctx.globalAlpha = 1;
+  if (ph > 0.72) {
+    const t = (ph - 0.72) / 0.28;
+    circle(ctx, px, y, 6 + t * 18, null, col, 3 * (1 - t));
+  }
+  text(ctx, `pluck ${GSTRINGS[s].name}`, px - r - 44, y - L.spacing * 0.95, 17, col);
+}
+
+/** Chord: a band across the strings to play, with a pick sweeping through them all. */
+function strumHint(ctx: CanvasRenderingContext2D, L: GuitarLayout, ss: number[], down: boolean, col: string, now: number) {
+  const ya = stringY(L, ss[0]) - L.spacing * 0.5;
+  const yb = stringY(L, ss[ss.length - 1]) + L.spacing * 0.5;
+  const x0 = L.strumX + 6;
+  const x1 = L.w - 8;
+  ctx.fillStyle = col + '38';
+  rr(ctx, x0, ya, x1 - x0, yb - ya, 10);
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = col;
+  ctx.stroke();
+  const px = x1 - Math.min(70, (x1 - x0) * 0.25);
+  const ph = (now % 1000) / 1000;
+  const from = down ? ya - 14 : yb + 14;
+  const to = down ? yb + 14 : ya - 14;
+  const py = from + (to - from) * Math.min(1, ph / 0.75);
+  // motion trail
+  ctx.strokeStyle = col;
+  ctx.globalAlpha = 0.6;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(px, from);
+  ctx.lineTo(px, py);
+  ctx.stroke();
+  ctx.globalAlpha = ph < 0.85 ? 1 : (1 - ph) / 0.15;
+  pick(ctx, px, py, Math.max(11, Math.min(17, L.spacing * 0.65)), '#fff', down);
+  ctx.globalAlpha = 1;
+  arrow(ctx, x0 + 26, ya + 6, yb - 6, down, col, 5);
+  text(ctx, down ? 'strum ↓' : 'strum ↑', (x0 + x1) / 2, ya - 14, 20, col);
 }
