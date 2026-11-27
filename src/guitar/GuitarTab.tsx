@@ -516,7 +516,9 @@ function GuitarPlay({
     gs.easyPick = opts.easyPick;
     gs.locked = real || demoing;
     gs.targetString = song && cur && !cur.chord && mode === 'wait' ? cur.fing.string : null;
-    gs.forceChord = opts.easyChords && cur?.chord && mode === 'wait' ? cur.chord : null;
+    // easy chords, or fingers roughly on the shape: the strum sounds the right chord
+    gs.forceChord =
+      cur?.chord && !real && ((opts.easyChords && mode === 'wait') || (!gs.locked && gs.chordHeld(cur.chord))) ? cur.chord : null;
 
     let waiting = false;
     if (song && running && !done) {
@@ -618,7 +620,8 @@ function GuitarPlay({
             if (!rightWay) say(p.up ? 'That one strums up ↑' : 'That one strums down ↓', 'info');
           } else {
             st.misses++;
-            const wrong = p.chord.frets.findIndex((f, s) => f > 0 && gs.fretOf(s) !== f);
+            const dots = gs.chordDots(p.chord);
+            const wrong = p.chord.frets.findIndex((f, s) => f > 0 && !dots[s]);
             say(
               wrong >= 0
                 ? `Finger ${p.chord.fingers[wrong]} on the ${GSTRINGS[wrong].name} string, fret ${p.chord.frets[wrong]} 👉`

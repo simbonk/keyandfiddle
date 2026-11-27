@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PitchDetector } from '../audio/pitch';
 import { renderPluck } from '../guitar/pluck';
-import { CHORD_SONGS, GSTRINGS, chordOfTag, GUITAR_SONGS, guitarFingering, guitarNotes } from '../guitar/theory';
+import { CHORDS, CHORD_SONGS, GSTRINGS, chordOfTag, GUITAR_SONGS, guitarFingering, guitarNotes } from '../guitar/theory';
+import { GuitarState } from '../guitar/instrument';
 
 const SR = 48000;
 
@@ -72,5 +73,31 @@ describe('songs with chords', () => {
       expect(strums, s.title).toBeGreaterThan(1);
       expect(guitarNotes(s).length, s.title).toBeGreaterThan(strums);
     }
+  });
+});
+
+describe('forgiving chord shapes', () => {
+  const hold = (pts: [number, number][]) => {
+    const gs = new GuitarState();
+    pts.forEach(([string, fret], i) => gs.touches.set(i, { kind: 'fret', string, fret, t: i }));
+    return gs;
+  };
+  it('counts fingers one string or fret off', () => {
+    // C: A3 D2 B1 — each finger a little off
+    expect(hold([[2, 3], [2, 2], [4, 2]]).chordHeld(CHORDS.C)).toBe(true);
+  });
+  it('lets one of three fingers miss, but not two', () => {
+    expect(hold([[1, 3], [2, 2]]).chordHeld(CHORDS.C)).toBe(true);
+    expect(hold([[1, 3]]).chordHeld(CHORDS.C)).toBe(false);
+  });
+  it('needs both fingers of a two-finger chord, one touch each', () => {
+    expect(hold([[1, 2], [2, 2]]).chordHeld(CHORDS.Em)).toBe(true);
+    expect(hold([[1, 2]]).chordHeld(CHORDS.Em)).toBe(false);
+  });
+  it('a finger far away does not count', () => {
+    expect(hold([[5, 5], [4, 5]]).chordHeld(CHORDS.Em)).toBe(false);
+  });
+  it('a barre finger is one finger', () => {
+    expect(hold([[2, 3], [3, 2], [5, 1]]).chordHeld(CHORDS.F)).toBe(true);
   });
 });
