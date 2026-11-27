@@ -33,6 +33,7 @@ import {
   chordMidis,
   chordOfTag,
   guitarNotes,
+  hasChords,
   isChordSong,
   type ChordShape,
   type GuitarNote,
@@ -149,6 +150,7 @@ export function GuitarTab() {
         <SongPicker
           songs={GUITAR_SONGS}
           onPick={setSong}
+          badge={(s) => (hasChords(s) ? '🎸 Chords' : null)}
           intro={
             <>
               {header}
@@ -442,7 +444,9 @@ function GuitarPlay({
   const [speed, setSpeed] = useState(0.75);
   const [feedback, setFeedback] = useState<{ text: string; tone: string; id: number } | null>(null);
   const [, force] = useState(0);
+  // a chords-only song (the Chords list); other songs may have a few strums in them
   const chordMode = !!song && isChordSong(song);
+  const withChords = !!song && hasChords(song);
   const say = (text: string, tone = 'good') => setFeedback({ text, tone, id: performance.now() });
 
   const bpm = song?.bpm ?? 80;
@@ -467,13 +471,17 @@ function GuitarPlay({
   const reset = () => {
     const st = g.current;
     if (!song) st.notes = [];
-    else if (chordMode)
-      st.notes = song.notes.map((n) => {
+    else {
+      // picked notes and chord strums, in time order
+      const picked: NoteSt[] = guitarNotes(song).map((n) => ({ ...n, state: 'pending', chord: null, up: false }));
+      const strums: NoteSt[] = song.notes.flatMap((n) => {
         const { chord, up } = chordOfTag(n.tag);
-        const s = chord ? chord.frets.findIndex((f) => f >= 0) : 0;
-        return { midi: n.midi ?? 40, beat: n.beat, beats: n.beats, fing: { string: s, fret: 0, finger: 0, label: '' }, state: 'pending', chord, up };
+        if (!chord) return [];
+        const s = chord.frets.findIndex((f) => f >= 0);
+        return [{ midi: n.midi ?? 40, beat: n.beat, beats: n.beats, fing: { string: s, fret: 0, finger: 0, label: '' }, state: 'pending' as const, chord, up }];
       });
-    else st.notes = guitarNotes(song).map((n) => ({ ...n, state: 'pending', chord: null, up: false }));
+      st.notes = [...picked, ...strums].sort((a, b) => a.beat - b.beat);
+    }
     st.songBeat = -3;
     st.hits = st.misses = st.dirRight = 0;
     st.demoIdx = -1;
@@ -507,8 +515,8 @@ function GuitarPlay({
     const cur = pending();
     gs.easyPick = opts.easyPick;
     gs.locked = real || demoing;
-    gs.targetString = song && !chordMode && cur && mode === 'wait' ? cur.fing.string : null;
-    gs.forceChord = chordMode && opts.easyChords && cur?.chord && mode === 'wait' ? cur.chord : null;
+    gs.targetString = song && cur && !cur.chord && mode === 'wait' ? cur.fing.string : null;
+    gs.forceChord = opts.easyChords && cur?.chord && mode === 'wait' ? cur.chord : null;
 
     let waiting = false;
     if (song && running && !done) {
@@ -534,12 +542,12 @@ function GuitarPlay({
       ctx,
       gs,
       {
-        notes: song && !chordMode ? st.notes : null,
-        chords: chordMode ? st.notes.map(fall) : null,
+        notes: song && !chordMode ? st.notes.filter((n) => !n.chord) : null,
+        chords: withChords ? st.notes.filter((n) => n.chord).map(fall) : null,
         songBeat: st.songBeat,
         visibleBeats: 4 / Math.max(0.5, speed),
-        current: tgt && !chordMode ? tgt : null,
-        currentChord: tgt && chordMode ? fall(tgt) : null,
+        current: tgt && !tgt.chord ? tgt : null,
+        currentChord: tgt?.chord ? fall(tgt) : null,
         waiting,
         names: opts.names,
         ghost: mode === 'demo' || real,
@@ -818,6 +826,34 @@ function GuitarPlay({
     </div>
   );
 
+  const how = real
+    ? [
+        'Prop the iPad up where you can see it.',
+        withChords ? 'Play each note or chord on your guitar when it reaches the line.' : 'Play each note on your guitar when it reaches the line.',
+        'I listen, and each one waits for you.',
+      ]
+    : [
+        mirrored ? 'Sit facing a mirror. Hold the iPad against your chest like a guitar, screen toward the mirror, strings along the bottom.' : 'Hold the iPad like a guitar, strings along the bottom.',
+        'Press the glowing dot on the neck with your left hand. Pressing alone makes no sound.',
+        withChords
+          ? 'Then play with your right hand on the guitar body: one glowing string means pluck it; a band across the strings means strum the way the arrow points.'
+          : opts.easyPick
+            ? 'Then tap the guitar body with your right hand to pluck the glowing string.'
+            : 'Then pluck the glowing string on the guitar body with your right hand.',
+        ...(mirrored ? ['Watch the mirror: everything reads the right way there.'] : []),
+      ];
+  const turnDeg = { cw: 90, ccw: -90, flip: 180, none: 0 }[rot];
+  /** start and end cards: never mirrored (you read them looking at the iPad), turned with the guitar */
+  const card = (el: React.ReactNode) =>
+    createPortal(
+      <div className="gt-card-layer">
+        <div className="tv-turn gt-card" style={{ transform: `rotate(${turnDeg}deg)` }}>
+          {el}
+        </div>
+      </div>,
+      document.body,
+    );
+
   const startText =
     mode === 'demo'
       ? 'Watch the dots and hear how it goes.'
@@ -845,18 +881,6 @@ function GuitarPlay({
             onLostPointerCapture={onUp}
             onContextMenu={(e) => e.preventDefault()}
           />
-          {song && !running && !done && (
-            <div className="overlay-center gt-over">
-              <div className="tv-turn">
-                <button className="btn big primary" onClick={start}>
-                  <Icon name={mode === 'demo' ? 'listen' : 'play'} size={22} />{' '}
-                  {st.songBeat > -3 ? 'Keep going' : mode === 'demo' ? 'Listen to it' : real ? 'Start listening' : 'Start'}
-                </button>
-                <p className="muted small">{startText}</p>
-                {mirrored && <p className="muted small">🪞 Back to front on purpose: it reads right in the mirror.</p>}
-              </div>
-            </div>
-          )}
           {micProblem && (
             <div className="overlay-center gt-over">
               <div className="tv-turn">
@@ -867,56 +891,89 @@ function GuitarPlay({
               </div>
             </div>
           )}
-          {done && (
-            <div className="overlay-center results gt-over">
-              <div className="tv-turn">
-                {mode === 'wait' ? (
-                  <>
-                    <div className="big-stars">
-                      {'⭐'.repeat(stars)}
-                      {'☆'.repeat(3 - stars)}
-                    </div>
-                    <h2>{stars === 3 ? 'Rock star!' : 'Nice work!'}</h2>
-                    <p>
-                      All {total} {chordMode ? 'chords' : 'notes'} played
-                      {st.misses ? ` · ${st.misses} tries that missed` : ' · no misses'}
-                      {chordMode && !real ? ` · strum direction right ${st.dirRight}/${total}` : ''}
-                    </p>
-                  </>
-                ) : (
-                  <h2>That's how it goes! Now you try 🎸</h2>
-                )}
-                <div className="row">
-                  {mode === 'demo' ? (
-                    <button
-                      className="btn big primary"
-                      onClick={() => {
-                        setMode('wait');
-                        reset();
-                      }}
-                    >
-                      🎸 My turn
-                    </button>
-                  ) : (
-                    <button
-                      className="btn big primary"
-                      onClick={() => {
-                        reset();
-                        setRunning(true);
-                      }}
-                    >
-                      Again
-                    </button>
-                  )}
-                  <button className="btn" onClick={onExit}>
-                    Another song
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+      {song &&
+        !running &&
+        !done &&
+        (real || opts.tipSeen) &&
+        card(
+          <>
+            <h2 className="gt-card-title">
+              {song.emoji} {song.title}
+            </h2>
+            {mode === 'demo' ? (
+              <p className="muted">{startText}</p>
+            ) : (
+              <ol className="gt-how">
+                {how.map((h) => (
+                  <li key={h}>{h}</li>
+                ))}
+              </ol>
+            )}
+            <div className="row">
+              <button className="btn big primary" onClick={start}>
+                <Icon name={mode === 'demo' ? 'listen' : 'play'} size={22} />{' '}
+                {st.songBeat > -3 ? 'Keep going' : mode === 'demo' ? 'Listen to it' : real ? 'Start listening' : 'Start'}
+              </button>
+              {!real && (
+                <button className="btn" onClick={() => setOpts((o) => ({ ...o, tipSeen: false }))}>
+                  <Icon name="help" size={18} /> How to hold it
+                </button>
+              )}
+              <button className="btn" onClick={onExit}>
+                Songs
+              </button>
+            </div>
+          </>,
+        )}
+      {done &&
+        card(
+          <>
+            {mode === 'wait' ? (
+              <>
+                <div className="big-stars">
+                  {'⭐'.repeat(stars)}
+                  {'☆'.repeat(3 - stars)}
+                </div>
+                <h2>{stars === 3 ? 'Rock star!' : 'Nice work!'}</h2>
+                <p>
+                  All {total} {chordMode ? 'chords' : withChords ? 'notes and chords' : 'notes'} played
+                  {st.misses ? ` · ${st.misses} tries that missed` : ' · no misses'}
+                  {withChords && !real ? ` · strum direction right ${st.dirRight}/${total}` : ''}
+                </p>
+              </>
+            ) : (
+              <h2>That's how it goes! Now you try 🎸</h2>
+            )}
+            <div className="row">
+              {mode === 'demo' ? (
+                <button
+                  className="btn big primary"
+                  onClick={() => {
+                    setMode('wait');
+                    reset();
+                  }}
+                >
+                  🎸 My turn
+                </button>
+              ) : (
+                <button
+                  className="btn big primary"
+                  onClick={() => {
+                    reset();
+                    setRunning(true);
+                  }}
+                >
+                  Play again
+                </button>
+              )}
+              <button className="btn" onClick={onExit}>
+                Choose another song
+              </button>
+            </div>
+          </>,
+        )}
       {showOpts &&
         createPortal(
           <div className="tv-opts-layer" onClick={(e) => e.target === e.currentTarget && setShowOpts(false)}>

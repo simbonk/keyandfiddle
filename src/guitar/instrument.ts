@@ -392,11 +392,16 @@ function drawGuitarBody(ctx: CanvasRenderingContext2D, gs: GuitarState, d: Guita
   ctx.fillStyle = body;
   rr(ctx, bx, L.bodyTop, L.w - bx - 2, gBot - L.bodyTop, 26);
   ctx.fill();
-  const hr = Math.min((L.w - bx) * 0.3, (gBot - L.bodyTop) * 0.34);
-  const hx = bx + Math.min((L.w - bx) * 0.4, hr + 24);
-  const hy = (L.bodyTop + gBot) / 2;
+  // the sound hole sits under the strings, all six running across it
+  const hr = Math.max(neckH * 0.5 + 6, Math.min((L.w - bx) * 0.42, neckH * 0.6));
+  const hx = bx + Math.min((L.w - bx) * 0.45, hr + 18);
+  const hy = (gTop + gBot) / 2;
+  ctx.save();
+  rr(ctx, bx, L.bodyTop, L.w - bx - 2, gBot - L.bodyTop, 26);
+  ctx.clip();
   circle(ctx, hx, hy, hr + 8, null, 'rgba(60,30,10,0.55)', 5);
   circle(ctx, hx, hy, hr, '#140b05');
+  ctx.restore();
   // headstock and fretboard
   ctx.fillStyle = '#5a3416';
   rr(ctx, 2, gTop, nutX - 2, neckH, 10);

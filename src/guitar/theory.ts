@@ -1,6 +1,6 @@
 // Guitar facts: strings, first-position fingering, chord shapes, and the songs.
 import { parseSong, type Song, type SongNote } from '../audio/notes';
-import { JB_CHORUS } from '../piano/songs';
+import { JB_CHORUS, JB_CHORUS_C, ODE, ODE_CHORDS, SUSANNA, SUSANNA_C, YANKEE, YANKEE_C } from '../piano/songs';
 import { VIOLIN_SONGS } from '../violin/theory';
 
 export interface GuitarString {
@@ -85,7 +85,7 @@ export interface GuitarNote extends SongNote {
 export function guitarNotes(song: Song): GuitarNote[] {
   const out: GuitarNote[] = [];
   for (const n of song.notes) {
-    if (n.midi === null || n.tag?.includes('L')) continue;
+    if (n.midi === null || n.tag?.includes('L') || chordOfTag(n.tag).chord) continue;
     const f = guitarFingering(n.midi);
     if (f) out.push({ midi: n.midi, beat: n.beat, beats: n.beats, fing: f });
   }
@@ -258,7 +258,104 @@ const STARTERS: Song[] = [
   },
 ];
 
-export const GUITAR_SONGS: Song[] = [...STARTERS, ...FROM_VIOLIN];
+/**
+ * Melody plus chords: the tune is picked note by note, and its long notes
+ * (the ends of phrases) become a strum of that bar's chord.
+ */
+function melodyWithChords(src: string, chart: string, beatsPerBar = 4, pickup = 0, minBeats = 2): SongNote[] {
+  const tune = melody(src);
+  const spans: { t0: number; t1: number; name: string }[] = [];
+  let t = pickup;
+  for (const bar of chart.split('|')) {
+    const cs = bar.trim().split(/\s+/).filter(Boolean);
+    if (!cs.length) continue;
+    const d = beatsPerBar / cs.length;
+    for (const c of cs) {
+      spans.push({ t0: t, t1: t + d, name: c });
+      t += d;
+    }
+  }
+  return tune.map((n) => {
+    if (n.midi === null || n.beats < minBeats) return n;
+    const sp = spans.find((x) => n.beat >= x.t0 - 0.01 && n.beat < x.t1 - 0.01);
+    const shape = sp && CHORDS[sp.name];
+    if (!shape) return n;
+    return { midi: GSTRINGS[shape.frets.findIndex((f) => f >= 0)].midi, beat: n.beat, beats: n.beats, tag: shape.name };
+  });
+}
+
+/** A song with chord strums in it (shown with a "Chords" badge). */
+export function hasChords(song: Song): boolean {
+  return song.notes.some((n) => chordOfTag(n.tag).chord);
+}
+
+const WITH_CHORDS: Song[] = [
+  {
+    id: 'gc-mary',
+    title: 'Mary Had a Little Lamb + chords',
+    emoji: '🐑',
+    bpm: 84,
+    level: 2,
+    blurb: 'Pick the tune, and strum C or G on the long notes.',
+    notes: melodyWithChords(
+      `E4:1 D4:1 C4:1 D4:1 | E4:1 E4:1 E4:2 | D4:1 D4:1 D4:2 | E4:1 G4:1 G4:2 |
+      E4:1 D4:1 C4:1 D4:1 | E4:1 E4:1 E4:1 E4:1 | D4:1 D4:1 E4:1 D4:1 | C4:4`,
+      'C | C | G | C | C | C | G | C',
+    ),
+  },
+  {
+    id: 'gc-twinkle',
+    title: 'Twinkle Twinkle + chords',
+    emoji: '⭐',
+    bpm: 84,
+    level: 2,
+    blurb: 'The tune in C, with a strum of C or G at the end of every line.',
+    notes: melodyWithChords(
+      `C4:1 C4:1 G4:1 G4:1 | A4:1 A4:1 G4:2 | F4:1 F4:1 E4:1 E4:1 | D4:1 D4:1 C4:2 |
+      G4:1 G4:1 F4:1 F4:1 | E4:1 E4:1 D4:2 | G4:1 G4:1 F4:1 F4:1 | E4:1 E4:1 D4:2 |
+      C4:1 C4:1 G4:1 G4:1 | A4:1 A4:1 G4:2 | F4:1 F4:1 E4:1 E4:1 | D4:1 D4:1 C4:2`,
+      'C | F C | F C | G C | C F | C G | C F | C G | C | F C | F C | G C',
+    ),
+  },
+  {
+    id: 'gc-ode',
+    title: 'Ode to Joy + chords',
+    emoji: '🎉',
+    bpm: 84,
+    level: 3,
+    blurb: 'Beethoven. Pick the tune; strum C or G on the long notes.',
+    notes: melodyWithChords(ODE, ODE_CHORDS),
+  },
+  {
+    id: 'gc-jingle',
+    title: 'Jingle Bells + chords',
+    emoji: '🛷',
+    bpm: 104,
+    level: 3,
+    blurb: 'The chorus. Jingle all the way… strum!',
+    notes: melodyWithChords(JB_CHORUS, JB_CHORUS_C),
+  },
+  {
+    id: 'gc-susanna',
+    title: 'Oh! Susanna + chords',
+    emoji: '🪕',
+    bpm: 96,
+    level: 3,
+    blurb: 'Pick the tune; strum D, A or G on the long notes.',
+    notes: melodyWithChords(SUSANNA, SUSANNA_C, 4, 1),
+  },
+  {
+    id: 'gc-yankee',
+    title: 'Yankee Doodle + chords',
+    emoji: '🎩',
+    bpm: 100,
+    level: 3,
+    blurb: 'Pick the tune; strum G or D on the long notes.',
+    notes: melodyWithChords(YANKEE, YANKEE_C),
+  },
+];
+
+export const GUITAR_SONGS: Song[] = [...STARTERS, ...WITH_CHORDS, ...FROM_VIOLIN];
 
 // ---------------------------------------------------------------------------
 // Chord practice
